@@ -122,14 +122,16 @@ def _test_mcp_connection(mcp_command: str) -> bool:
 
 def run_setup() -> None:
     """Run the interactive setup wizard."""
-    console.print(Panel(
-        "[bold]Welcome to Fangbot[/bold]\n\n"
-        "This wizard will configure your LLM provider and verify\n"
-        "the OpenMedicine MCP server connection.\n\n"
-        "[dim]Config will be saved to ~/.fangbot/.env[/dim]",
-        title="fangbot init",
-        border_style="blue",
-    ))
+    console.print(
+        Panel(
+            "[bold]Welcome to Fangbot[/bold]\n\n"
+            "This wizard will configure your LLM provider and verify\n"
+            "the OpenMedicine MCP server connection.\n\n"
+            "[dim]Config will be saved to ~/.fangbot/.env[/dim]",
+            title="fangbot init",
+            border_style="blue",
+        )
+    )
     console.print()
 
     # Step 1: Check MCP server
@@ -180,12 +182,14 @@ def run_setup() -> None:
 
     # Done
     console.print()
-    console.print(Panel(
-        f"[bold green]Setup complete![/bold green]\n\n"
-        f"Provider: {display_name}\n"
-        f"Config:   ~/.fangbot/.env\n"
-        f"Logs:     ~/.fangbot/logs/\n\n"
-        f"[bold]Next:[/bold] run [bold cyan]fangbot chat[/bold cyan] to start a session.",
-        title="Ready",
-        border_style="green",
-    ))
+    console.print(
+        Panel(
+            f"[bold green]Setup complete![/bold green]\n\n"
+            f"Provider: {display_name}\n"
+            f"Config:   ~/.fangbot/.env\n"
+            f"Logs:     ~/.fangbot/logs/\n\n"
+            f"[bold]Next:[/bold] run [bold cyan]fangbot chat[/bold cyan] to start a session.",
+            title="Ready",
+            border_style="green",
+        )
+    )

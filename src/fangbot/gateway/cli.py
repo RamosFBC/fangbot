@@ -119,7 +119,7 @@ def _select_model_interactive(provider_name: str, current_model: str) -> str | N
 
     console.print()
     console.print(table)
-    console.print(f"[dim]  * = current model[/dim]")
+    console.print("[dim]  * = current model[/dim]")
     console.print()
 
     # Prompt for selection
@@ -180,16 +180,18 @@ async def _cmd_help(state: ChatState, args: list[str]) -> bool:
 
 @slash_command("status", "Show current provider, model, and session info")
 async def _cmd_status(state: ChatState, args: list[str]) -> bool:
-    console.print(Panel(
-        f"[bold]Provider:[/bold]  {state.provider_name}\n"
-        f"[bold]Model:[/bold]     {state.provider.model_name}\n"
-        f"[bold]Session:[/bold]   {state.audit.session_id}\n"
-        f"[bold]Tools:[/bold]     {len(state.tools)} discovered\n"
-        f"[bold]History:[/bold]   {len(state.session.messages)} messages\n"
-        f"[bold]Audit log:[/bold] {state.audit.file_path}",
-        title="Status",
-        border_style="blue",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Provider:[/bold]  {state.provider_name}\n"
+            f"[bold]Model:[/bold]     {state.provider.model_name}\n"
+            f"[bold]Session:[/bold]   {state.audit.session_id}\n"
+            f"[bold]Tools:[/bold]     {len(state.tools)} discovered\n"
+            f"[bold]History:[/bold]   {len(state.session.messages)} messages\n"
+            f"[bold]Audit log:[/bold] {state.audit.file_path}",
+            title="Status",
+            border_style="blue",
+        )
+    )
     return True
 
 
@@ -263,7 +265,9 @@ async def _cmd_models(state: ChatState, args: list[str]) -> bool:
     provider = args[0] if args else state.provider_name
     models = PROVIDER_MODELS.get(provider)
     if not models:
-        console.print(f"[red]No model catalog for '{provider}'. Available: {', '.join(PROVIDER_MODELS)}[/red]")
+        console.print(
+            f"[red]No model catalog for '{provider}'. Available: {', '.join(PROVIDER_MODELS)}[/red]"
+        )
         return True
 
     table = Table(
@@ -371,14 +375,16 @@ async def _chat_async() -> None:
     session_id = audit.start_session()
     session = SessionContext(system_prompt=CLINICAL_SYSTEM_PROMPT)
 
-    console.print(Panel(
-        f"[bold]Fangbot[/bold]\n"
-        f"Provider: {provider.model_name} | Session: {session_id}\n"
-        f"Type [bold cyan]/help[/bold cyan] for commands, [bold cyan]/model[/bold cyan] to switch models, "
-        f"[bold cyan]quit[/bold cyan] to exit.",
-        title="Fangbot",
-        border_style="blue",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Fangbot[/bold]\n"
+            f"Provider: {provider.model_name} | Session: {session_id}\n"
+            f"Type [bold cyan]/help[/bold cyan] for commands, [bold cyan]/model[/bold cyan] to switch models, "
+            f"[bold cyan]quit[/bold cyan] to exit.",
+            title="Fangbot",
+            border_style="blue",
+        )
+    )
 
     mcp = OpenMedicineMCPClient(
         command=settings.mcp_command,
@@ -429,19 +435,25 @@ async def _chat_async() -> None:
 
             # Regular message — run through ReAct loop
             try:
-                with console.status(f"[bold cyan]{state.provider.model_name} thinking...[/bold cyan]"):
+                with console.status(
+                    f"[bold cyan]{state.provider.model_name} thinking...[/bold cyan]"
+                ):
                     result = await state.react.run(stripped, state.session, state.tools)
             except Exception as e:
                 console.print(f"\n[red]Error: {e}[/red]")
-                console.print("[dim]The session is still active. Try /model to switch models or /clear to reset.[/dim]\n")
+                console.print(
+                    "[dim]The session is still active. Try /model to switch models or /clear to reset.[/dim]\n"
+                )
                 continue
 
             if not result.guardrail_passed:
-                console.print(Panel(
-                    "\n".join(result.guardrail_violations),
-                    title="Guardrail Warnings",
-                    border_style="yellow",
-                ))
+                console.print(
+                    Panel(
+                        "\n".join(result.guardrail_violations),
+                        title="Guardrail Warnings",
+                        border_style="yellow",
+                    )
+                )
 
             console.print(f"\n{result.synthesis}\n")
             console.print(

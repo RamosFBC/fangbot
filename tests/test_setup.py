@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
 from typer.testing import CliRunner
 
 from fangbot.config import FANGBOT_HOME
@@ -16,7 +15,12 @@ runner = CliRunner()
 
 class TestCheckMCPServer:
     def test_finds_direct_binary(self):
-        with patch("shutil.which", side_effect=lambda cmd: "/usr/bin/open-medicine-mcp" if cmd == "open-medicine-mcp" else None):
+        with patch(
+            "shutil.which",
+            side_effect=lambda cmd: (
+                "/usr/bin/open-medicine-mcp" if cmd == "open-medicine-mcp" else None
+            ),
+        ):
             assert _check_mcp_server() == "open-medicine-mcp"
 
     def test_falls_back_to_uv(self):
@@ -38,7 +42,9 @@ class TestCheckMCPServer:
 class TestWriteEnvFile:
     def test_creates_env_file(self, tmp_path):
         with patch("fangbot.gateway.setup.FANGBOT_HOME", tmp_path):
-            path = _write_env_file("claude", "ANTHROPIC_API_KEY", "sk-test-123", "open-medicine-mcp")
+            path = _write_env_file(
+                "claude", "ANTHROPIC_API_KEY", "sk-test-123", "open-medicine-mcp"
+            )
 
         assert path.exists()
         content = path.read_text()
