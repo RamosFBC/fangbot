@@ -188,6 +188,109 @@ class TestOpenAIProvider:
         assert result.tool_call_id == "tc_1"
 
 
+class TestLocalProvider:
+    """Test LocalProvider — subclasses OpenAI with custom base_url."""
+
+    def _make_provider(self, base_url="http://localhost:11434/v1", model="llama3.2"):
+        from fangbot.brain.providers.local import LocalProvider
+
+        return LocalProvider(base_url=base_url, model=model)
+
+    def test_model_name(self):
+        provider = self._make_provider(model="mistral")
+        assert provider.model_name == "mistral"
+
+    def test_supports_temperature_always_true(self):
+        provider = self._make_provider(model="o1-mini")
+        assert provider._supports_temperature() is True
+
+    def test_inherits_format_tool(self):
+        provider = self._make_provider()
+        tool = ToolDefinition(
+            name="search_clinical_calculators",
+            description="Search",
+            input_schema={"type": "object"},
+        )
+        result = provider._format_tool(tool)
+        assert result["type"] == "function"
+        assert result["function"]["name"] == "search_clinical_calculators"
+
+    def test_format_tool_result(self):
+        provider = self._make_provider()
+        result = provider.format_tool_result(
+            ToolResult(tool_call_id="tc_1", content="Score: 3")
+        )
+        assert result.role == Role.TOOL
+        assert result.content == "Score: 3"
+        assert result.tool_call_id == "tc_1"
+
+    def test_custom_base_url(self):
+        provider = self._make_provider(base_url="http://myserver:9000/v1")
+        assert (
+            str(provider._client.base_url).rstrip("/") == "http://myserver:9000/v1"
+        )
+
+    def test_api_key_defaults_to_placeholder(self):
+        provider = self._make_provider()
+        assert provider._client.api_key == "not-needed"
+
+    def test_custom_api_key(self):
+        from fangbot.brain.providers.local import LocalProvider
+
+        provider = LocalProvider(
+            base_url="http://localhost:11434/v1",
+            model="llama3.2",
+            api_key="my-secret",
+        )
+        assert provider._client.api_key == "my-secret"
+
+    @pytest.mark.asyncio
+    async def test_call_integration(self):
+        """Test full call flow with mocked client."""
+        provider = self._make_provider()
+
+        mock_fn = MagicMock()
+        mock_fn.name = "search_clinical_calculators"
+        mock_fn.arguments = json.dumps({"query": "GCS"})
+
+        mock_tc = MagicMock()
+        mock_tc.id = "call_local_1"
+        mock_tc.function = mock_fn
+
+        mock_message = MagicMock()
+        mock_message.content = "Searching."
+        mock_message.tool_calls = [mock_tc]
+
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_choice.finish_reason = "tool_calls"
+
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.usage = MagicMock(prompt_tokens=40, completion_tokens=10)
+        mock_response.model = "llama3.2"
+
+        provider._client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await provider.call(
+            messages=[Message(role=Role.USER, content="Calculate GCS")],
+            tools=[
+                ToolDefinition(
+                    name="search_clinical_calculators",
+                    description="Search",
+                    input_schema={"type": "object"},
+                )
+            ],
+            system="You are a clinical assistant.",
+        )
+
+        assert result.content == "Searching."
+        assert len(result.tool_calls) == 1
+        assert result.model == "llama3.2"
+
+
 class TestClaudeProvider:
     """Test Claude provider message formatting."""
 
