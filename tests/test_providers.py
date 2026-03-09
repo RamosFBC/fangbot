@@ -217,18 +217,14 @@ class TestLocalProvider:
 
     def test_format_tool_result(self):
         provider = self._make_provider()
-        result = provider.format_tool_result(
-            ToolResult(tool_call_id="tc_1", content="Score: 3")
-        )
+        result = provider.format_tool_result(ToolResult(tool_call_id="tc_1", content="Score: 3"))
         assert result.role == Role.TOOL
         assert result.content == "Score: 3"
         assert result.tool_call_id == "tc_1"
 
     def test_custom_base_url(self):
         provider = self._make_provider(base_url="http://myserver:9000/v1")
-        assert (
-            str(provider._client.base_url).rstrip("/") == "http://myserver:9000/v1"
-        )
+        assert str(provider._client.base_url).rstrip("/") == "http://myserver:9000/v1"
 
     def test_api_key_defaults_to_placeholder(self):
         provider = self._make_provider()
@@ -270,9 +266,7 @@ class TestLocalProvider:
         mock_response.usage = MagicMock(prompt_tokens=40, completion_tokens=10)
         mock_response.model = "llama3.2"
 
-        provider._client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        provider._client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await provider.call(
             messages=[Message(role=Role.USER, content="Calculate GCS")],

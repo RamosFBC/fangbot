@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from fangbot.gateway.models_catalog import ModelInfo, discover_local_models
+from fangbot.gateway.models_catalog import discover_local_models
 
 
 class TestDiscoverLocalModels:

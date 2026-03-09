@@ -67,7 +67,9 @@ def _prompt_api_key(env_var: str, display_name: str) -> str:
         console.print("[red]API key cannot be empty.[/red]")
 
 
-def _write_env_file(provider: str, env_var: str, api_key: str, mcp_command: str, base_url: str = "") -> Path:
+def _write_env_file(
+    provider: str, env_var: str, api_key: str, mcp_command: str, base_url: str = ""
+) -> Path:
     """Write the ~/.fangbot/.env file."""
     FANGBOT_HOME.mkdir(parents=True, exist_ok=True)
 
