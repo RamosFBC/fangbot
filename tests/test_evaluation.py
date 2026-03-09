@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from pydantic import ValidationError
 
+from fangbot.evaluation.batch_runner import BatchRunner
 from fangbot.evaluation.models import (
     ExpectedToolCall,
     GoldStandardCase,
@@ -255,3 +259,70 @@ class TestReportGenerator:
         }
         report = generate_report("CHA2DS2-VASc", golds, results_by_provider)
         assert "case" in report.lower() or "Case" in report
+
+
+class TestBatchRunner:
+    @pytest.mark.asyncio
+    async def test_runs_all_cases(self, tmp_path):
+        """BatchRunner should run each gold standard case through the agent."""
+        golds = [
+            _make_gold("c1", 2, RiskTier.MODERATE),
+            _make_gold("c2", 5, RiskTier.HIGH),
+        ]
+        config = StudyConfig(
+            study_name="Test Study",
+            calculator_name="CHA2DS2-VASc",
+            cases_dir="cases",
+            results_dir=str(tmp_path / "results"),
+        )
+
+        runner = BatchRunner(config)
+        with patch.object(runner, "_run_single_case", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = CaseResult(
+                case_id="placeholder",
+                provider="claude",
+                model="claude-sonnet-4-20250514",
+                actual_score=2,
+                actual_risk_tier=RiskTier.MODERATE,
+                actual_tool_calls=["search_clinical_calculators", "execute_clinical_calculator"],
+                synthesis="CHA2DS2-VASc score: 2",
+                chain_of_thought=["Analyzing"],
+                guardrail_passed=True,
+                iterations=2,
+            )
+
+            results = await runner.run_cases(golds, provider_name="claude", model_name="claude-sonnet-4-20250514")
+
+        assert len(results) == 2
+        assert mock_run.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_saves_results_to_json(self, tmp_path):
+        """BatchRunner should save results as JSON."""
+        golds = [_make_gold("c1", 2, RiskTier.MODERATE)]
+        config = StudyConfig(
+            study_name="Test Study",
+            calculator_name="CHA2DS2-VASc",
+            cases_dir="cases",
+            results_dir=str(tmp_path / "results"),
+        )
+
+        runner = BatchRunner(config)
+        with patch.object(runner, "_run_single_case", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = CaseResult(
+                case_id="c1",
+                provider="claude",
+                model="test-model",
+                actual_score=2,
+                actual_risk_tier=RiskTier.MODERATE,
+                actual_tool_calls=["execute_clinical_calculator"],
+                guardrail_passed=True,
+            )
+
+            results = await runner.run_cases(golds, provider_name="claude", model_name="test-model")
+            runner.save_results(results, provider_name="claude", model_name="test-model")
+
+        results_dir = Path(config.results_dir)
+        assert results_dir.exists()
+        json_files = list(results_dir.glob("*.json"))
+        assert len(json_files) == 1
