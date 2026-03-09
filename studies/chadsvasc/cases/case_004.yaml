@@ -1,0 +1,20 @@
+case_id: "case_004"
+narrative: >
+  A 45-year-old male with lone atrial fibrillation. He has no hypertension,
+  no diabetes, no heart failure, no vascular disease, and no history of
+  stroke or TIA. He is an avid runner with no chronic conditions.
+expected_score: 0
+expected_risk_tier: "low"
+expected_tool_calls:
+  - tool_name: "search_clinical_calculators"
+  - tool_name: "execute_clinical_calculator"
+expected_variables:
+  age: "45"
+  sex: "male"
+  chf: "0"
+  hypertension: "0"
+  diabetes: "0"
+  stroke_tia: "0"
+  vascular_disease: "0"
+notes: >
+  Male under 65, no risk factors. Total = 0. Low risk.

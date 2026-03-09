@@ -1,0 +1,22 @@
+case_id: "case_003"
+narrative: >
+  An 80-year-old female with a history of type 2 diabetes mellitus,
+  hypertension, and a transient ischemic attack (TIA) two years ago is
+  being evaluated for anticoagulation in the setting of persistent atrial
+  fibrillation. She has no history of heart failure or vascular disease.
+expected_score: 7
+expected_risk_tier: "high"
+expected_tool_calls:
+  - tool_name: "search_clinical_calculators"
+  - tool_name: "execute_clinical_calculator"
+expected_variables:
+  age: "80"
+  sex: "female"
+  chf: "0"
+  hypertension: "1"
+  diabetes: "1"
+  stroke_tia: "1"
+  vascular_disease: "0"
+notes: >
+  Age >= 75 = 2pts, female = 1pt, HTN = 1pt, DM = 1pt, stroke/TIA = 2pts.
+  Total = 7. High risk.

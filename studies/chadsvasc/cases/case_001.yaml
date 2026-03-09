@@ -1,0 +1,22 @@
+case_id: "case_001"
+narrative: >
+  A 72-year-old male presents for management of newly diagnosed atrial
+  fibrillation. His medical history includes congestive heart failure (NYHA
+  class II, EF 35%) and hypertension controlled on lisinopril. He has no
+  history of diabetes, stroke, TIA, or vascular disease.
+expected_score: 3
+expected_risk_tier: "high"
+expected_tool_calls:
+  - tool_name: "search_clinical_calculators"
+  - tool_name: "execute_clinical_calculator"
+expected_variables:
+  age: "72"
+  sex: "male"
+  chf: "1"
+  hypertension: "1"
+  diabetes: "0"
+  stroke_tia: "0"
+  vascular_disease: "0"
+notes: >
+  Age 65-74 = 1pt, CHF = 1pt, HTN = 1pt, male = 0pts. Total = 3.
+  High risk (>= 2 in males).

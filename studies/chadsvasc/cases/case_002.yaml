@@ -1,0 +1,21 @@
+case_id: "case_002"
+narrative: >
+  A 58-year-old female is seen in cardiology clinic for atrial fibrillation
+  follow-up. She has no significant past medical history — no heart failure,
+  no hypertension, no diabetes, no prior strokes, and no peripheral vascular
+  disease. She is otherwise healthy and exercises regularly.
+expected_score: 1
+expected_risk_tier: "low"
+expected_tool_calls:
+  - tool_name: "search_clinical_calculators"
+  - tool_name: "execute_clinical_calculator"
+expected_variables:
+  age: "58"
+  sex: "female"
+  chf: "0"
+  hypertension: "0"
+  diabetes: "0"
+  stroke_tia: "0"
+  vascular_disease: "0"
+notes: >
+  Female sex = 1pt. No other risk factors. Total = 1. Low risk.

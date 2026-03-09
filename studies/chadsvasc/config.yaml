@@ -1,0 +1,13 @@
+study_name: "CHA2DS2-VASc Scoring"
+calculator_name: "CHA2DS2-VASc"
+description: >
+  Evaluate LLM accuracy in calculating CHA2DS2-VASc scores from clinical
+  narratives using the OpenMedicine MCP server. All patient data is synthetic.
+cases_dir: "cases"
+results_dir: "results"
+providers:
+  - claude
+models:
+  claude: "claude-sonnet-4-20250514"
+max_iterations: 10
+temperature: 0.0

@@ -1,0 +1,23 @@
+case_id: "case_005"
+narrative: >
+  A 68-year-old female with atrial fibrillation presents for stroke risk
+  assessment. Her history is notable for well-controlled hypertension on
+  amlodipine, type 2 diabetes on metformin, and peripheral arterial disease
+  with a prior femoral stent. She had a lacunar stroke one year ago. She has
+  no history of heart failure.
+expected_score: 7
+expected_risk_tier: "high"
+expected_tool_calls:
+  - tool_name: "search_clinical_calculators"
+  - tool_name: "execute_clinical_calculator"
+expected_variables:
+  age: "68"
+  sex: "female"
+  chf: "0"
+  hypertension: "1"
+  diabetes: "1"
+  stroke_tia: "1"
+  vascular_disease: "1"
+notes: >
+  Age 65-74 = 1pt, female = 1pt, HTN = 1pt, DM = 1pt, stroke = 2pts,
+  vascular disease = 1pt. Total = 7. High risk.
