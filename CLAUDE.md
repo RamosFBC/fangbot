@@ -1,6 +1,6 @@
-# OpenMedicine Agent
+# Fangbot
 
-An open-source medical reasoning agent that connects to the [OpenMedicine](https://github.com/open-medicine/openmedicine) MCP server to perform deterministic, auditable clinical calculations. **This is NOT a diagnostic tool** — it is a research platform for validating LLM-based clinical tool orchestration.
+A clinical reasoning agent powered by [OpenMedicine](https://github.com/open-medicine/openmedicine) — fangs of the healing serpent. Connects to the OpenMedicine MCP server to perform deterministic, auditable clinical calculations. **This is NOT a diagnostic tool** — it is a research platform for validating LLM-based clinical tool orchestration.
 
 ## Critical Constraint
 
@@ -12,13 +12,17 @@ Enforced by: system prompt rules, evaluation harness (protocol adherence check),
 
 ```bash
 uv sync                                        # Install dependencies
-uv run agent chat                               # Interactive CLI mode
-uv run agent run studies/chadsvasc/config.yaml   # Batch evaluation
-uv run agent report studies/chadsvasc/results/   # Generate comparison report
+uv run fangbot chat                             # Interactive CLI mode
+uv run fangbot run studies/chadsvasc/config.yaml # Batch evaluation
+uv run fangbot report studies/chadsvasc/results/ # Generate comparison report
 uv run python -m pytest -v                       # Run tests
 uv run python -m pytest tests/test_file.py -v    # Run single test file
 uv run python -m pytest -k "test_name" -v        # Run specific test
 ```
+
+## Configuration
+
+Environment variables use the `FANGBOT_` prefix (e.g. `FANGBOT_PROVIDER`, `FANGBOT_MODEL`). The agent also reads native SDK env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) as fallback.
 
 ## Tech Stack
 
@@ -27,8 +31,7 @@ uv run python -m pytest -k "test_name" -v        # Run specific test
 - **LLM SDKs:** anthropic, openai, google-genai (multi-model benchmarking)
 - **MCP client:** mcp (Python SDK) — connects to OpenMedicine via stdio
 - **Validation:** Pydantic
-- **CLI:** typer or click
-- **API:** FastAPI
+- **CLI:** typer + rich
 - **Testing:** pytest + Hypothesis
 - **Audit format:** JSON-lines (.jsonl)
 
@@ -41,13 +44,13 @@ Gateway → Brain → Skills (MCP) → Memory
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| Gateway | `src/openmedicine_agent/gateway/` | Case ingestion (CLI, API, file loader) |
-| Brain | `src/openmedicine_agent/brain/` | ReAct loop + clinical guardrails + LLM providers |
-| Skills | `src/openmedicine_agent/skills/` | MCP client connecting to OpenMedicine server |
-| Memory | `src/openmedicine_agent/memory/` | Session context, audit log (JSONL), chain-of-thought |
-| Workflows | `src/openmedicine_agent/workflows/` | Study-specific clinical workflows |
-| Evaluation | `src/openmedicine_agent/evaluation/` | Batch runner, gold standard comparison, metrics |
-| Safety | `src/openmedicine_agent/safety/` | Validators, contraindication flags |
+| Gateway | `src/fangbot/gateway/` | Case ingestion (CLI, API, file loader) |
+| Brain | `src/fangbot/brain/` | ReAct loop + clinical guardrails + LLM providers |
+| Skills | `src/fangbot/skills/` | MCP client connecting to OpenMedicine server |
+| Memory | `src/fangbot/memory/` | Session context, audit log (JSONL), chain-of-thought |
+| Workflows | `src/fangbot/workflows/` | Study-specific clinical workflows |
+| Evaluation | `src/fangbot/evaluation/` | Batch runner, gold standard comparison, metrics |
+| Safety | `src/fangbot/safety/` | Validators, contraindication flags |
 
 ## MCP Integration Rules
 
@@ -60,9 +63,9 @@ Gateway → Brain → Skills (MCP) → Memory
 
 Abstract base in `brain/providers/base.py`. Implementations:
 - `claude.py` — Anthropic Claude (primary)
-- `openai.py` — OpenAI GPT-4
-- `gemini.py` — Google Gemini
-- `ollama.py` — Local models via Ollama
+- `openai.py` — OpenAI GPT-4/GPT-5
+- `gemini.py` — Google Gemini (planned)
+- `ollama.py` — Local models via Ollama (planned)
 
 All providers must implement the same interface for benchmark comparability.
 

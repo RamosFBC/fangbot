@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from typer.testing import CliRunner
 
-from openmedicine_agent.gateway.cli import (
+from fangbot.gateway.cli import (
     ChatState,
     _commands,
     _create_provider,
@@ -13,8 +13,8 @@ from openmedicine_agent.gateway.cli import (
     _select_model_interactive,
     app,
 )
-from openmedicine_agent.gateway.models_catalog import PROVIDER_DEFAULTS, PROVIDER_MODELS
-from openmedicine_agent.config import Settings
+from fangbot.gateway.models_catalog import PROVIDER_DEFAULTS, PROVIDER_MODELS
+from fangbot.config import Settings
 
 runner = CliRunner()
 
@@ -23,7 +23,7 @@ class TestCLI:
     def test_help(self):
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "OpenMedicine Agent CLI" in result.output
+        assert "Fangbot" in result.output
 
     def test_chat_help(self):
         result = runner.invoke(app, ["chat", "--help"])
@@ -71,8 +71,8 @@ class TestSlashCommands:
 
     @pytest.fixture
     def chat_state(self, tmp_path):
-        from openmedicine_agent.memory.audit import AuditLogger
-        from openmedicine_agent.memory.session import SessionContext
+        from fangbot.memory.audit import AuditLogger
+        from fangbot.memory.session import SessionContext
 
         settings = Settings(anthropic_api_key="test", openai_api_key="test")
         provider = _create_provider("claude", settings)
@@ -80,7 +80,7 @@ class TestSlashCommands:
         audit.start_session()
         session = SessionContext(system_prompt="test")
 
-        from openmedicine_agent.brain.react import ReActLoop
+        from fangbot.brain.react import ReActLoop
         from tests.conftest import MockMCPClient
 
         mcp = MockMCPClient()

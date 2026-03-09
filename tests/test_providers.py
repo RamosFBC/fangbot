@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from openmedicine_agent.models import (
+from fangbot.models import (
     Message,
     ProviderResponse,
     Role,
@@ -21,7 +21,7 @@ class TestOpenAIProvider:
     """Test OpenAI provider message formatting and response parsing."""
 
     def _make_provider(self):
-        from openmedicine_agent.brain.providers.openai import OpenAIProvider
+        from fangbot.brain.providers.openai import OpenAIProvider
 
         provider = OpenAIProvider(api_key="test-key", model="gpt-4o")
         return provider
@@ -193,7 +193,7 @@ class TestClaudeProvider:
     """Test Claude provider message formatting."""
 
     def _make_provider(self):
-        from openmedicine_agent.brain.providers.claude import ClaudeProvider
+        from fangbot.brain.providers.claude import ClaudeProvider
 
         return ClaudeProvider(api_key="test-key")
 

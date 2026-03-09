@@ -14,15 +14,15 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from openmedicine_agent.config import Settings, get_settings
-from openmedicine_agent.gateway.models_catalog import (
+from fangbot.config import Settings, get_settings
+from fangbot.gateway.models_catalog import (
     CATEGORY_STYLES,
     PROVIDER_DEFAULTS,
     PROVIDER_MODELS,
     ModelInfo,
 )
 
-app = typer.Typer(name="agent", help="OpenMedicine Agent CLI")
+app = typer.Typer(name="fangbot", help="Fangbot — clinical reasoning powered by OpenMedicine")
 console = Console()
 
 
@@ -43,11 +43,11 @@ def _create_provider(name: str, settings: Settings, model: str | None = None):
     resolved_model = model or PROVIDER_DEFAULTS.get(name, "")
 
     if name == "claude":
-        from openmedicine_agent.brain.providers.claude import ClaudeProvider
+        from fangbot.brain.providers.claude import ClaudeProvider
 
         return ClaudeProvider(api_key=settings.anthropic_api_key or None, model=resolved_model)
     elif name == "openai":
-        from openmedicine_agent.brain.providers.openai import OpenAIProvider
+        from fangbot.brain.providers.openai import OpenAIProvider
 
         return OpenAIProvider(api_key=settings.openai_api_key or None, model=resolved_model)
     else:
@@ -71,7 +71,7 @@ class ChatState:
     mcp: object  # OpenMedicineMCPClient
 
     def _rebuild_react(self) -> None:
-        from openmedicine_agent.brain.react import ReActLoop
+        from fangbot.brain.react import ReActLoop
 
         self.react = ReActLoop(
             provider=self.provider,
@@ -351,12 +351,12 @@ async def _handle_slash_command(user_input: str, state: ChatState) -> bool:
 
 async def _chat_async() -> None:
     """Async implementation of the interactive chat session."""
-    from openmedicine_agent.brain.react import ReActLoop
-    from openmedicine_agent.brain.system_prompt import CLINICAL_SYSTEM_PROMPT
-    from openmedicine_agent.memory.audit import AuditLogger
-    from openmedicine_agent.memory.session import SessionContext
-    from openmedicine_agent.skills.mcp_client import OpenMedicineMCPClient
-    from openmedicine_agent.skills.tool_registry import ToolRegistry
+    from fangbot.brain.react import ReActLoop
+    from fangbot.brain.system_prompt import CLINICAL_SYSTEM_PROMPT
+    from fangbot.memory.audit import AuditLogger
+    from fangbot.memory.session import SessionContext
+    from fangbot.skills.mcp_client import OpenMedicineMCPClient
+    from fangbot.skills.tool_registry import ToolRegistry
 
     settings = get_settings()
     _setup_logging(settings.log_level)
@@ -372,11 +372,11 @@ async def _chat_async() -> None:
     session = SessionContext(system_prompt=CLINICAL_SYSTEM_PROMPT)
 
     console.print(Panel(
-        f"[bold]OpenMedicine Agent[/bold]\n"
+        f"[bold]Fangbot[/bold]\n"
         f"Provider: {provider.model_name} | Session: {session_id}\n"
         f"Type [bold cyan]/help[/bold cyan] for commands, [bold cyan]/model[/bold cyan] to switch models, "
         f"[bold cyan]quit[/bold cyan] to exit.",
-        title="Clinical Reasoning Assistant",
+        title="Fangbot",
         border_style="blue",
     ))
 

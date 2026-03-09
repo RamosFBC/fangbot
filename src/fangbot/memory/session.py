@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from openmedicine_agent.models import Message, Role
+from fangbot.models import Message, Role
 
 
 class SessionContext:

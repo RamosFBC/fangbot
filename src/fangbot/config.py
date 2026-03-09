@@ -14,7 +14,7 @@ load_dotenv()
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="OMAGENT_", env_file=".env")
+    model_config = SettingsConfigDict(env_prefix="FANGBOT_", env_file=".env", extra="ignore")
 
     # LLM provider
     provider: str = "claude"
@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_api_keys_from_env(self) -> Settings:
-        """Fall back to native SDK env var names if OMAGENT_* versions are empty."""
+        """Fall back to native SDK env var names if FANGBOT_* versions are empty."""
         if not self.anthropic_api_key:
             self.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         if not self.openai_api_key:

@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from openmedicine_agent.brain.providers.base import LLMProvider
-from openmedicine_agent.models import (
+from fangbot.brain.providers.base import LLMProvider
+from fangbot.models import (
     Message,
     ProviderResponse,
     Role,
@@ -16,7 +16,7 @@ from openmedicine_agent.models import (
     ToolDefinition,
     ToolResult,
 )
-from openmedicine_agent.skills.mcp_client import OpenMedicineMCPClient
+from fangbot.skills.mcp_client import OpenMedicineMCPClient
 
 
 # -- Sample tool definitions matching OpenMedicine's 4 tools --

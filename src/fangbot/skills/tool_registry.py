@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from openmedicine_agent.models import ToolDefinition
-from openmedicine_agent.skills.mcp_client import OpenMedicineMCPClient
+from fangbot.models import ToolDefinition
+from fangbot.skills.mcp_client import OpenMedicineMCPClient
 
 logger = logging.getLogger(__name__)
 

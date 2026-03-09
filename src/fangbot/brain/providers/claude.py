@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import anthropic
 
-from openmedicine_agent.brain.providers.base import LLMProvider
-from openmedicine_agent.models import (
+from fangbot.brain.providers.base import LLMProvider
+from fangbot.models import (
     Message,
     ProviderResponse,
     Role,

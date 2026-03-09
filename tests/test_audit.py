@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from openmedicine_agent.memory.audit import AuditEvent, AuditLogger, EventType
-from openmedicine_agent.memory.session import SessionContext
+from fangbot.memory.audit import AuditEvent, AuditLogger, EventType
+from fangbot.memory.session import SessionContext
 
 
 class TestAuditLogger:

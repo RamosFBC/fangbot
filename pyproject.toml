@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "openmedicine-agent"
+name = "fangbot"
 version = "0.1.0"
-description = "Open-source medical reasoning agent connecting to OpenMedicine MCP server"
+description = "Clinical reasoning agent powered by OpenMedicine — fangs of the healing serpent"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -30,10 +30,10 @@ dev = [
 ]
 
 [project.scripts]
-agent = "openmedicine_agent.gateway.cli:app"
+fangbot = "fangbot.gateway.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/openmedicine_agent"]
+packages = ["src/fangbot"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from openmedicine_agent.brain.react import ReActLoop
-from openmedicine_agent.memory.audit import AuditLogger, EventType
-from openmedicine_agent.memory.session import SessionContext
-from openmedicine_agent.models import ProviderResponse, ToolCall
+from fangbot.brain.react import ReActLoop
+from fangbot.memory.audit import AuditLogger, EventType
+from fangbot.memory.session import SessionContext
+from fangbot.models import ProviderResponse, ToolCall
 
 from .conftest import MockMCPClient, MockProvider
 
@@ -119,7 +119,7 @@ class TestReActLoop:
     @pytest.mark.asyncio
     async def test_tool_error_handled_gracefully(self, sample_tools, audit_logger, session):
         """MCP tool errors should be passed back to the LLM, not crash."""
-        from openmedicine_agent.skills.mcp_client import MCPToolError
+        from fangbot.skills.mcp_client import MCPToolError
 
         provider = MockProvider(responses=[
             ProviderResponse(

@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from openmedicine_agent.models import ToolDefinition
-from openmedicine_agent.skills.mcp_client import MCPToolError, OpenMedicineMCPClient
-from openmedicine_agent.skills.tool_registry import ToolRegistry
+from fangbot.models import ToolDefinition
+from fangbot.skills.mcp_client import MCPToolError, OpenMedicineMCPClient
+from fangbot.skills.tool_registry import ToolRegistry
 
 
 class TestOpenMedicineMCPClient:

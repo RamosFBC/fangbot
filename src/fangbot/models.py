@@ -1,4 +1,4 @@
-"""Shared Pydantic models for the OpenMedicine Agent."""
+"""Shared Pydantic models for Fangbot."""
 
 from __future__ import annotations
 

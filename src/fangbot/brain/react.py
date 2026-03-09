@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from openmedicine_agent.brain.guardrails import GuardrailResult, run_all_guardrails
-from openmedicine_agent.brain.providers.base import LLMProvider
-from openmedicine_agent.memory.audit import AuditLogger, EventType
-from openmedicine_agent.memory.session import SessionContext
-from openmedicine_agent.models import ToolCall, ToolDefinition
-from openmedicine_agent.skills.mcp_client import MCPToolError, OpenMedicineMCPClient
+from fangbot.brain.guardrails import GuardrailResult, run_all_guardrails
+from fangbot.brain.providers.base import LLMProvider
+from fangbot.memory.audit import AuditLogger, EventType
+from fangbot.memory.session import SessionContext
+from fangbot.models import ToolCall, ToolDefinition
+from fangbot.skills.mcp_client import MCPToolError, OpenMedicineMCPClient
 
 logger = logging.getLogger(__name__)
 

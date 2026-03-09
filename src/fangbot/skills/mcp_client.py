@@ -10,7 +10,7 @@ from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.types import TextContent
 
-from openmedicine_agent.models import ToolDefinition
+from fangbot.models import ToolDefinition
 
 logger = logging.getLogger(__name__)
 
