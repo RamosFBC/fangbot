@@ -92,16 +92,20 @@ class OpenAIProvider(LLMProvider):
                 oai_messages.append(oai_msg)
             elif msg.tool_call_id:
                 # Tool result message
-                oai_messages.append({
-                    "role": "tool",
-                    "tool_call_id": msg.tool_call_id,
-                    "content": msg.content,
-                })
+                oai_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": msg.tool_call_id,
+                        "content": msg.content,
+                    }
+                )
             else:
-                oai_messages.append({
-                    "role": msg.role.value,
-                    "content": msg.content,
-                })
+                oai_messages.append(
+                    {
+                        "role": msg.role.value,
+                        "content": msg.content,
+                    }
+                )
 
         return oai_messages
 
@@ -124,11 +128,13 @@ class OpenAIProvider(LLMProvider):
         tool_calls: list[ToolCall] = []
         if message.tool_calls:
             for tc in message.tool_calls:
-                tool_calls.append(ToolCall(
-                    id=tc.id,
-                    name=tc.function.name,
-                    arguments=json.loads(tc.function.arguments),
-                ))
+                tool_calls.append(
+                    ToolCall(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=json.loads(tc.function.arguments),
+                    )
+                )
 
         return ProviderResponse(
             content=message.content or "",

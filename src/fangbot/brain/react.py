@@ -150,10 +150,13 @@ class ReActLoop:
         session.add_assistant_message(result.synthesis)
         session.add_user_message(guardrail.corrective_message or "")
 
-        self._audit.log(EventType.GUARDRAIL_VIOLATION, {
-            "violations": guardrail.violations,
-            "action": "corrective_injection",
-        })
+        self._audit.log(
+            EventType.GUARDRAIL_VIOLATION,
+            {
+                "violations": guardrail.violations,
+                "action": "corrective_injection",
+            },
+        )
 
         # One more pass with remaining iterations
         try:

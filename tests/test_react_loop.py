@@ -28,38 +28,46 @@ class TestReActLoop:
     @pytest.mark.asyncio
     async def test_simple_tool_call_flow(self, sample_tools, audit_logger, session):
         """Agent calls a tool, then synthesizes — the happy path."""
-        provider = MockProvider(responses=[
-            # First response: LLM wants to call search
-            ProviderResponse(
-                content="Let me search for the calculator.",
-                tool_calls=[ToolCall(
-                    id="tc_1",
-                    name="search_clinical_calculators",
-                    arguments={"query": "CHA2DS2-VASc"},
-                )],
-                stop_reason="tool_use",
-            ),
-            # Second response: LLM wants to execute
-            ProviderResponse(
-                content="Now executing the calculator.",
-                tool_calls=[ToolCall(
-                    id="tc_2",
-                    name="execute_clinical_calculator",
-                    arguments={"calculator_id": "chadsvasc", "parameters": {"age": 72}},
-                )],
-                stop_reason="tool_use",
-            ),
-            # Third response: final synthesis
-            ProviderResponse(
-                content="The CHA2DS2-VASc score is 3.",
-                stop_reason="end_turn",
-            ),
-        ])
+        provider = MockProvider(
+            responses=[
+                # First response: LLM wants to call search
+                ProviderResponse(
+                    content="Let me search for the calculator.",
+                    tool_calls=[
+                        ToolCall(
+                            id="tc_1",
+                            name="search_clinical_calculators",
+                            arguments={"query": "CHA2DS2-VASc"},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+                # Second response: LLM wants to execute
+                ProviderResponse(
+                    content="Now executing the calculator.",
+                    tool_calls=[
+                        ToolCall(
+                            id="tc_2",
+                            name="execute_clinical_calculator",
+                            arguments={"calculator_id": "chadsvasc", "parameters": {"age": 72}},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+                # Third response: final synthesis
+                ProviderResponse(
+                    content="The CHA2DS2-VASc score is 3.",
+                    stop_reason="end_turn",
+                ),
+            ]
+        )
 
-        mcp = MockMCPClient(tool_results={
-            "search_clinical_calculators": "Found: CHA2DS2-VASc calculator (id: chadsvasc)",
-            "execute_clinical_calculator": "Score: 3. DOI: 10.1234/example",
-        })
+        mcp = MockMCPClient(
+            tool_results={
+                "search_clinical_calculators": "Found: CHA2DS2-VASc calculator (id: chadsvasc)",
+                "execute_clinical_calculator": "Score: 3. DOI: 10.1234/example",
+            }
+        )
 
         loop = ReActLoop(provider=provider, mcp_client=mcp, audit_logger=audit_logger)
         result = await loop.run("Calculate CHA2DS2-VASc for a 72yo male", session, sample_tools)
@@ -73,18 +81,20 @@ class TestReActLoop:
     @pytest.mark.asyncio
     async def test_guardrail_fires_on_no_tool_use(self, sample_tools, audit_logger, session):
         """Agent answers without tools — guardrail should flag violation."""
-        provider = MockProvider(responses=[
-            # LLM tries to answer directly without tools
-            ProviderResponse(
-                content="The CHA2DS2-VASc score is 3 based on age and hypertension.",
-                stop_reason="end_turn",
-            ),
-            # After corrective injection, still no tools
-            ProviderResponse(
-                content="I apologize, but I cannot access tools right now.",
-                stop_reason="end_turn",
-            ),
-        ])
+        provider = MockProvider(
+            responses=[
+                # LLM tries to answer directly without tools
+                ProviderResponse(
+                    content="The CHA2DS2-VASc score is 3 based on age and hypertension.",
+                    stop_reason="end_turn",
+                ),
+                # After corrective injection, still no tools
+                ProviderResponse(
+                    content="I apologize, but I cannot access tools right now.",
+                    stop_reason="end_turn",
+                ),
+            ]
+        )
 
         mcp = MockMCPClient()
         loop = ReActLoop(provider=provider, mcp_client=mcp, audit_logger=audit_logger)
@@ -99,18 +109,22 @@ class TestReActLoop:
         """Agent that keeps calling tools should be stopped after max iterations."""
         infinite_tool_response = ProviderResponse(
             content="Searching again...",
-            tool_calls=[ToolCall(
-                id="tc_loop",
-                name="search_clinical_calculators",
-                arguments={"query": "test"},
-            )],
+            tool_calls=[
+                ToolCall(
+                    id="tc_loop",
+                    name="search_clinical_calculators",
+                    arguments={"query": "test"},
+                )
+            ],
             stop_reason="tool_use",
         )
 
         provider = MockProvider(responses=[infinite_tool_response] * 15)
         mcp = MockMCPClient()
 
-        loop = ReActLoop(provider=provider, mcp_client=mcp, audit_logger=audit_logger, max_iterations=3)
+        loop = ReActLoop(
+            provider=provider, mcp_client=mcp, audit_logger=audit_logger, max_iterations=3
+        )
         result = await loop.run("Test", session, sample_tools)
 
         assert result.iterations == 3
@@ -121,21 +135,25 @@ class TestReActLoop:
         """MCP tool errors should be passed back to the LLM, not crash."""
         from fangbot.skills.mcp_client import MCPToolError
 
-        provider = MockProvider(responses=[
-            ProviderResponse(
-                content="Executing calculator.",
-                tool_calls=[ToolCall(
-                    id="tc_err",
-                    name="execute_clinical_calculator",
-                    arguments={"calculator_id": "bad"},
-                )],
-                stop_reason="tool_use",
-            ),
-            ProviderResponse(
-                content="The calculator returned an error. Unable to compute.",
-                stop_reason="end_turn",
-            ),
-        ])
+        provider = MockProvider(
+            responses=[
+                ProviderResponse(
+                    content="Executing calculator.",
+                    tool_calls=[
+                        ToolCall(
+                            id="tc_err",
+                            name="execute_clinical_calculator",
+                            arguments={"calculator_id": "bad"},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+                ProviderResponse(
+                    content="The calculator returned an error. Unable to compute.",
+                    stop_reason="end_turn",
+                ),
+            ]
+        )
 
         mcp = MockMCPClient()
         # Override call_tool to raise
@@ -158,21 +176,25 @@ class TestReActLoop:
     @pytest.mark.asyncio
     async def test_audit_events_recorded(self, sample_tools, audit_logger, session):
         """Verify all audit events are recorded during a run."""
-        provider = MockProvider(responses=[
-            ProviderResponse(
-                content="Searching.",
-                tool_calls=[ToolCall(
-                    id="tc_a",
-                    name="search_clinical_calculators",
-                    arguments={"query": "test"},
-                )],
-                stop_reason="tool_use",
-            ),
-            ProviderResponse(
-                content="Done. The result is X.",
-                stop_reason="end_turn",
-            ),
-        ])
+        provider = MockProvider(
+            responses=[
+                ProviderResponse(
+                    content="Searching.",
+                    tool_calls=[
+                        ToolCall(
+                            id="tc_a",
+                            name="search_clinical_calculators",
+                            arguments={"query": "test"},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+                ProviderResponse(
+                    content="Done. The result is X.",
+                    stop_reason="end_turn",
+                ),
+            ]
+        )
         mcp = MockMCPClient()
 
         loop = ReActLoop(provider=provider, mcp_client=mcp, audit_logger=audit_logger)

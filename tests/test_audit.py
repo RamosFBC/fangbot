@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from fangbot.memory.audit import AuditEvent, AuditLogger, EventType
 from fangbot.memory.session import SessionContext

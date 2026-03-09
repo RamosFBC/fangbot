@@ -9,7 +9,6 @@ import pytest
 
 from fangbot.models import (
     Message,
-    ProviderResponse,
     Role,
     ToolCall,
     ToolDefinition,
@@ -164,11 +163,13 @@ class TestOpenAIProvider:
 
         provider._client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        tools = [ToolDefinition(
-            name="search_clinical_calculators",
-            description="Search",
-            input_schema={"type": "object"},
-        )]
+        tools = [
+            ToolDefinition(
+                name="search_clinical_calculators",
+                description="Search",
+                input_schema={"type": "object"},
+            )
+        ]
         result = await provider.call(
             messages=[Message(role=Role.USER, content="Calculate CHA2DS2-VASc")],
             tools=tools,
@@ -181,9 +182,7 @@ class TestOpenAIProvider:
 
     def test_format_tool_result(self):
         provider = self._make_provider()
-        result = provider.format_tool_result(
-            ToolResult(tool_call_id="tc_1", content="Score: 3")
-        )
+        result = provider.format_tool_result(ToolResult(tool_call_id="tc_1", content="Score: 3"))
         assert result.role == Role.TOOL
         assert result.content == "Score: 3"
         assert result.tool_call_id == "tc_1"
@@ -213,9 +212,7 @@ class TestClaudeProvider:
 
     def test_format_tool_result(self):
         provider = self._make_provider()
-        result = provider.format_tool_result(
-            ToolResult(tool_call_id="tc_1", content="Score: 3")
-        )
+        result = provider.format_tool_result(ToolResult(tool_call_id="tc_1", content="Score: 3"))
         # Anthropic tool results go in a user message
         assert result.role == Role.USER
         assert result.tool_call_id == "tc_1"

@@ -65,12 +65,14 @@ class ClaudeProvider(LLMProvider):
                 if msg.content:
                     content.append({"type": "text", "text": msg.content})
                 for tc in msg.tool_calls:
-                    content.append({
-                        "type": "tool_use",
-                        "id": tc.id,
-                        "name": tc.name,
-                        "input": tc.arguments,
-                    })
+                    content.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": tc.arguments,
+                        }
+                    )
                 anthropic_messages.append({"role": "assistant", "content": content})
             elif msg.tool_call_id:
                 # Tool result — Anthropic expects these in a user message with tool_result blocks
@@ -80,29 +82,36 @@ class ClaudeProvider(LLMProvider):
                     and anthropic_messages[-1]["role"] == "user"
                     and isinstance(anthropic_messages[-1]["content"], list)
                     and any(
-                        b.get("type") == "tool_result"
-                        for b in anthropic_messages[-1]["content"]
+                        b.get("type") == "tool_result" for b in anthropic_messages[-1]["content"]
                     )
                 ):
-                    anthropic_messages[-1]["content"].append({
-                        "type": "tool_result",
-                        "tool_use_id": msg.tool_call_id,
-                        "content": msg.content,
-                    })
-                else:
-                    anthropic_messages.append({
-                        "role": "user",
-                        "content": [{
+                    anthropic_messages[-1]["content"].append(
+                        {
                             "type": "tool_result",
                             "tool_use_id": msg.tool_call_id,
                             "content": msg.content,
-                        }],
-                    })
+                        }
+                    )
+                else:
+                    anthropic_messages.append(
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": msg.tool_call_id,
+                                    "content": msg.content,
+                                }
+                            ],
+                        }
+                    )
             else:
-                anthropic_messages.append({
-                    "role": msg.role.value,
-                    "content": msg.content,
-                })
+                anthropic_messages.append(
+                    {
+                        "role": msg.role.value,
+                        "content": msg.content,
+                    }
+                )
         return anthropic_messages
 
     def _format_tool(self, tool: ToolDefinition) -> dict:
@@ -122,11 +131,13 @@ class ClaudeProvider(LLMProvider):
             if block.type == "text":
                 text_parts.append(block.text)
             elif block.type == "tool_use":
-                tool_calls.append(ToolCall(
-                    id=block.id,
-                    name=block.name,
-                    arguments=block.input,
-                ))
+                tool_calls.append(
+                    ToolCall(
+                        id=block.id,
+                        name=block.name,
+                        arguments=block.input,
+                    )
+                )
 
         return ProviderResponse(
             content="\n".join(text_parts),

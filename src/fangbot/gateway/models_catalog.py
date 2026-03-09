@@ -22,7 +22,9 @@ OPENAI_MODELS: list[ModelInfo] = [
     ModelInfo("gpt-5", "GPT-5", "Most capable GPT model", "flagship"),
     ModelInfo("gpt-5-mini", "GPT-5 Mini", "Smaller GPT-5 variant, fast and capable", "fast"),
     ModelInfo("gpt-5-nano", "GPT-5 Nano", "Smallest GPT-5 variant, lowest cost", "fast"),
-    ModelInfo("gpt-5.4-pro", "GPT-5.4 Pro", "Latest snapshot — smarter and more precise", "flagship"),
+    ModelInfo(
+        "gpt-5.4-pro", "GPT-5.4 Pro", "Latest snapshot — smarter and more precise", "flagship"
+    ),
     # Codex
     ModelInfo("gpt-5.1-codex", "GPT-5.1 Codex", "Optimized for agentic coding tasks", "coding"),
     ModelInfo("gpt-5.1-codex-mini", "GPT-5.1 Codex Mini", "Smaller coding model", "coding"),
@@ -37,7 +39,9 @@ OPENAI_MODELS: list[ModelInfo] = [
     ModelInfo("o3", "o3", "Most powerful reasoning model — coding, math, science", "reasoning"),
     ModelInfo("o3-pro", "o3 Pro", "Extended thinking for most reliable responses", "reasoning"),
     ModelInfo("o3-mini", "o3 Mini", "Fast reasoning, on par with o1 at lower latency", "reasoning"),
-    ModelInfo("o4-mini", "o4 Mini", "Cost-efficient reasoning, best on AIME benchmarks", "reasoning"),
+    ModelInfo(
+        "o4-mini", "o4 Mini", "Cost-efficient reasoning, best on AIME benchmarks", "reasoning"
+    ),
     ModelInfo("o1", "o1", "Previous-gen reasoning model", "reasoning"),
     ModelInfo("o1-mini", "o1 Mini", "Previous-gen small reasoning model", "reasoning"),
 ]
@@ -48,13 +52,32 @@ OPENAI_MODELS: list[ModelInfo] = [
 
 CLAUDE_MODELS: list[ModelInfo] = [
     # Claude 4.6 family (latest)
-    ModelInfo("claude-opus-4-6", "Claude Opus 4.6", "Most intelligent — coding, agents, complex tasks", "flagship"),
-    ModelInfo("claude-sonnet-4-6", "Claude Sonnet 4.6", "Balanced speed and intelligence, fewer tokens", "general"),
+    ModelInfo(
+        "claude-opus-4-6",
+        "Claude Opus 4.6",
+        "Most intelligent — coding, agents, complex tasks",
+        "flagship",
+    ),
+    ModelInfo(
+        "claude-sonnet-4-6",
+        "Claude Sonnet 4.6",
+        "Balanced speed and intelligence, fewer tokens",
+        "general",
+    ),
     # Claude 4.5 family
-    ModelInfo("claude-haiku-4-5-20251001", "Claude Haiku 4.5", "Fast and affordable for everyday tasks", "fast"),
+    ModelInfo(
+        "claude-haiku-4-5-20251001",
+        "Claude Haiku 4.5",
+        "Fast and affordable for everyday tasks",
+        "fast",
+    ),
     # Claude 4 family
-    ModelInfo("claude-sonnet-4-20250514", "Claude Sonnet 4", "Previous-gen balanced model", "general"),
-    ModelInfo("claude-opus-4-20250514", "Claude Opus 4", "Previous-gen most capable model", "flagship"),
+    ModelInfo(
+        "claude-sonnet-4-20250514", "Claude Sonnet 4", "Previous-gen balanced model", "general"
+    ),
+    ModelInfo(
+        "claude-opus-4-20250514", "Claude Opus 4", "Previous-gen most capable model", "flagship"
+    ),
 ]
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,6 @@ from fangbot.gateway.cli import (
     _commands,
     _create_provider,
     _handle_slash_command,
-    _select_model_interactive,
     app,
 )
 from fangbot.gateway.models_catalog import PROVIDER_DEFAULTS, PROVIDER_MODELS
@@ -98,7 +97,17 @@ class TestSlashCommands:
         )
 
     def test_all_expected_commands_registered(self):
-        expected = {"help", "status", "claude", "openai", "model", "models", "clear", "history", "compact"}
+        expected = {
+            "help",
+            "status",
+            "claude",
+            "openai",
+            "model",
+            "models",
+            "clear",
+            "history",
+            "compact",
+        }
         assert expected.issubset(set(_commands.keys()))
 
     @pytest.mark.asyncio

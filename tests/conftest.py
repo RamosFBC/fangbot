@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -12,11 +11,9 @@ from fangbot.models import (
     Message,
     ProviderResponse,
     Role,
-    ToolCall,
     ToolDefinition,
     ToolResult,
 )
-from fangbot.skills.mcp_client import OpenMedicineMCPClient
 
 
 # -- Sample tool definitions matching OpenMedicine's 4 tools --
