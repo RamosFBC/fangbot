@@ -65,7 +65,7 @@ Abstract base in `brain/providers/base.py`. Implementations:
 - `claude.py` — Anthropic Claude (primary)
 - `openai.py` — OpenAI GPT-4/GPT-5
 - `gemini.py` — Google Gemini (planned)
-- `ollama.py` — Local models via Ollama (planned)
+- `local.py` — Local servers via OpenAI-compatible API (Ollama, LM Studio, vLLM)
 
 All providers must implement the same interface for benchmark comparability.
 
