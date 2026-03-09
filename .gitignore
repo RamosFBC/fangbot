@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+*.manifest
+*.spec
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# uv
+uv.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.hypothesis/
+
+# Logs
+logs/
+*.log
+
+# Claude Code
+.claude/
+
+# Ruff
+.ruff_cache/
+
+# mypy
+.mypy_cache/
+
+# Jupyter
+.ipynb_checkpoints/
