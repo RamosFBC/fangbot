@@ -605,10 +605,60 @@ def _default_model(provider_name: str) -> str:
 
 
 @app.command()
-def report(results_dir: Path = typer.Argument(..., help="Path to results directory")) -> None:
-    """Generate a comparison report from evaluation results (Phase 2)."""
-    console.print(f"[yellow]Report generation not yet implemented. Dir: {results_dir}[/yellow]")
-    raise typer.Exit(0)
+def report(
+    results_dir: Path = typer.Argument(..., help="Path to results directory"),
+    config: Path = typer.Option(None, "--config", "-c", help="Path to study config YAML (for gold standard cases)"),
+) -> None:
+    """Generate a comparison report from evaluation results."""
+    import json
+
+    from fangbot.evaluation.gold_standard import load_cases, load_study_config
+    from fangbot.evaluation.models import CaseResult
+    from fangbot.evaluation.report import generate_report
+
+    if not results_dir.is_dir():
+        console.print(f"[red]Error: Results directory not found:[/red] {results_dir}")
+        raise typer.Exit(1)
+
+    json_files = sorted(results_dir.glob("*.json"))
+    if not json_files:
+        console.print(f"[red]No result JSON files found in {results_dir}[/red]")
+        raise typer.Exit(1)
+
+    golds = None
+    study_name = "Evaluation"
+    if config:
+        try:
+            study_config = load_study_config(config)
+            study_name = study_config.study_name
+            cases_dir = Path(study_config.cases_dir)
+            if not cases_dir.is_absolute():
+                cases_dir = config.parent / cases_dir
+            golds = load_cases(cases_dir)
+        except (FileNotFoundError, ValueError) as exc:
+            console.print(f"[yellow]Warning: Could not load gold standard cases: {exc}[/yellow]")
+
+    results_by_provider: dict[str, list[CaseResult]] = {}
+    for jf in json_files:
+        data = json.loads(jf.read_text())
+        provider_key = f"{data['provider']}/{data['model']}"
+        case_results = [CaseResult(**c) for c in data["cases"]]
+        results_by_provider[provider_key] = case_results
+        if not study_name or study_name == "Evaluation":
+            study_name = data.get("study_name", "Evaluation")
+
+    if golds:
+        report_text = generate_report(study_name, golds, results_by_provider)
+        report_path = results_dir / "report.md"
+        report_path.write_text(report_text)
+        console.print(f"[green]Report saved to:[/green] {report_path}")
+        console.print(report_text)
+    else:
+        console.print("[yellow]No gold standard config provided — showing raw results summary.[/yellow]")
+        for provider_key, results in results_by_provider.items():
+            console.print(f"\n[bold]{provider_key}[/bold]: {len(results)} cases")
+            errors = sum(1 for r in results if r.error)
+            console.print(f"  Errors: {errors}")
 
 
 if __name__ == "__main__":

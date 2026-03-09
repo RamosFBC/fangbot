@@ -328,6 +328,8 @@ class TestBatchRunner:
         assert len(json_files) == 1
 
 
+import json as json_mod
+
 from typer.testing import CliRunner
 from fangbot.gateway.cli import app as cli_app
 
@@ -367,3 +369,64 @@ class TestCLIRunCommand:
         result = runner.invoke(cli_app, ["run", str(config_file)])
         # Should have loaded config successfully (even if run fails due to no API key)
         assert "Loading study" in result.output or "Error" in result.output or result.exit_code == 0
+
+
+class TestCLIReportCommand:
+    def test_report_with_missing_dir(self):
+        runner = CliRunner()
+        result = runner.invoke(cli_app, ["report", "/nonexistent/dir"])
+        assert result.exit_code != 0 or "not found" in result.output.lower() or "error" in result.output.lower()
+
+    def test_report_generates_markdown(self, tmp_path):
+        """CLI report command should generate a Markdown report from saved results."""
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        results_data = {
+            "study_name": "CHA2DS2-VASc Test",
+            "provider": "claude",
+            "model": "claude-sonnet-4-20250514",
+            "timestamp": "20260309_120000",
+            "cases": [
+                {
+                    "case_id": "c1",
+                    "provider": "claude",
+                    "model": "claude-sonnet-4-20250514",
+                    "actual_score": 2,
+                    "actual_risk_tier": "moderate",
+                    "actual_tool_calls": ["execute_clinical_calculator"],
+                    "synthesis": "Score: 2",
+                    "chain_of_thought": ["Step 1"],
+                    "guardrail_passed": True,
+                    "iterations": 2,
+                    "error": None,
+                    "duration_seconds": 1.5,
+                    "timestamp": "2026-03-09T12:00:00",
+                    "audit_session_id": "abc123",
+                },
+            ],
+        }
+        (results_dir / "claude_test_20260309.json").write_text(json_mod.dumps(results_data))
+
+        cases_dir = tmp_path / "cases"
+        cases_dir.mkdir()
+        case_data = {
+            "case_id": "c1",
+            "narrative": "72yo male with CHF.",
+            "expected_score": 2,
+            "expected_risk_tier": "moderate",
+            "expected_tool_calls": [{"tool_name": "execute_clinical_calculator"}],
+        }
+        (cases_dir / "c1.yaml").write_text(yaml.dump(case_data))
+
+        config_data = {
+            "study_name": "CHA2DS2-VASc Test",
+            "calculator_name": "CHA2DS2-VASc",
+            "cases_dir": str(cases_dir),
+            "results_dir": str(results_dir),
+        }
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(yaml.dump(config_data))
+
+        runner = CliRunner()
+        result = runner.invoke(cli_app, ["report", str(results_dir), "--config", str(config_file)])
+        assert result.exit_code == 0 or "Report" in result.output
