@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Load .env into the actual environment so SDK-native env vars
-# (OPENAI_API_KEY, ANTHROPIC_API_KEY) are available to all libraries.
-load_dotenv()
+# ~/.fangbot/ is the canonical config home (like .claude/, .openclaw/)
+FANGBOT_HOME = Path.home() / ".fangbot"
+
+# Load env files: project-local .env first, then ~/.fangbot/.env as fallback.
+# SDK-native env vars (OPENAI_API_KEY, ANTHROPIC_API_KEY) become available to all libraries.
+load_dotenv()  # project-local .env
+load_dotenv(FANGBOT_HOME / ".env")  # user-global config
 
 
 class Settings(BaseSettings):
@@ -23,16 +28,16 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     model: str = "claude-sonnet-4-20250514"
 
-    # MCP server
-    mcp_command: str = "uv"
-    mcp_args: str = "run,open-medicine-mcp"
+    # MCP server — production default assumes open-medicine-mcp is on PATH
+    mcp_command: str = "open-medicine-mcp"
+    mcp_args: str = ""
 
     # Agent parameters
     max_iterations: int = 10
     temperature: float = 0.0
 
-    # Logging
-    log_dir: str = "logs"
+    # Logging — defaults to ~/.fangbot/logs/
+    log_dir: str = str(FANGBOT_HOME / "logs")
     log_level: str = "INFO"
 
     @model_validator(mode="after")
@@ -48,6 +53,8 @@ class Settings(BaseSettings):
 
     @property
     def mcp_args_list(self) -> list[str]:
+        if not self.mcp_args:
+            return []
         return self.mcp_args.split(",")
 
 

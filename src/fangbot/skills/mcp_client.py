@@ -24,13 +24,13 @@ class OpenMedicineMCPClient:
 
     def __init__(
         self,
-        command: str = "uv",
+        command: str = "open-medicine-mcp",
         args: list[str] | None = None,
         env: dict[str, str] | None = None,
     ):
         self._server_params = StdioServerParameters(
             command=command,
-            args=args or ["run", "open-medicine-mcp"],
+            args=args or [],
             env=env,
         )
         self._session: ClientSession | None = None

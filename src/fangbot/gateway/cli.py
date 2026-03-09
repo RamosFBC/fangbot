@@ -454,6 +454,14 @@ async def _chat_async() -> None:
 
 
 @app.command()
+def init() -> None:
+    """Set up Fangbot — configure provider, API keys, and test MCP connection."""
+    from fangbot.gateway.setup import run_setup
+
+    run_setup()
+
+
+@app.command()
 def chat() -> None:
     """Start an interactive clinical reasoning session."""
     asyncio.run(_chat_async())
