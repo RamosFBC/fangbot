@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
+import os
+
+from dotenv import load_dotenv
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Load .env into the actual environment so SDK-native env vars
+# (OPENAI_API_KEY, ANTHROPIC_API_KEY) are available to all libraries.
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -26,6 +34,17 @@ class Settings(BaseSettings):
     # Logging
     log_dir: str = "logs"
     log_level: str = "INFO"
+
+    @model_validator(mode="after")
+    def _resolve_api_keys_from_env(self) -> Settings:
+        """Fall back to native SDK env var names if OMAGENT_* versions are empty."""
+        if not self.anthropic_api_key:
+            self.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not self.openai_api_key:
+            self.openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+        if not self.google_api_key:
+            self.google_api_key = os.environ.get("GOOGLE_API_KEY", "")
+        return self
 
     @property
     def mcp_args_list(self) -> list[str]:

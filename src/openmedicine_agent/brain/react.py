@@ -58,11 +58,20 @@ class ReActLoop:
             result.iterations = iteration
             logger.debug(f"ReAct iteration {iteration}")
 
-            response = await self._provider.call(
-                messages=session.messages,
-                tools=tools,
-                system=session.system_prompt,
-            )
+            try:
+                response = await self._provider.call(
+                    messages=session.messages,
+                    tools=tools,
+                    system=session.system_prompt,
+                )
+            except Exception as e:
+                error_msg = f"LLM API error: {e}"
+                logger.error(error_msg)
+                self._audit.log(EventType.TOOL_ERROR, {"error": error_msg})
+                result.synthesis = f"Error calling {self._provider.model_name}: {e}"
+                result.guardrail_passed = False
+                result.guardrail_violations = [error_msg]
+                return result
 
             # Record thinking
             if response.content:
@@ -147,11 +156,15 @@ class ReActLoop:
         })
 
         # One more pass with remaining iterations
-        corrective_response = await self._provider.call(
-            messages=session.messages,
-            tools=tools,
-            system=session.system_prompt,
-        )
+        try:
+            corrective_response = await self._provider.call(
+                messages=session.messages,
+                tools=tools,
+                system=session.system_prompt,
+            )
+        except Exception as e:
+            logger.error(f"LLM API error during corrective attempt: {e}")
+            return None
 
         if corrective_response.tool_calls:
             # Good — the LLM is now trying to use tools
@@ -163,11 +176,14 @@ class ReActLoop:
             # Continue the loop for remaining iterations
             for _ in range(self._max_iterations - result.iterations):
                 result.iterations += 1
-                response = await self._provider.call(
-                    messages=session.messages,
-                    tools=tools,
-                    system=session.system_prompt,
-                )
+                try:
+                    response = await self._provider.call(
+                        messages=session.messages,
+                        tools=tools,
+                        system=session.system_prompt,
+                    )
+                except Exception:
+                    return None
                 if response.content:
                     result.chain_of_thought.append(response.content)
                     self._audit.log_think(response.content)
