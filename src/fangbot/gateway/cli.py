@@ -549,9 +549,59 @@ def chat() -> None:
 
 @app.command()
 def run(config: Path = typer.Argument(..., help="Path to study config YAML")) -> None:
-    """Run a batch evaluation study (Phase 2)."""
-    console.print(f"[yellow]Batch evaluation not yet implemented. Config: {config}[/yellow]")
-    raise typer.Exit(0)
+    """Run a batch evaluation study against gold standard cases."""
+    asyncio.run(_run_study(config))
+
+
+async def _run_study(config_path: Path) -> None:
+    """Execute a batch evaluation study."""
+    from fangbot.evaluation.batch_runner import BatchRunner
+    from fangbot.evaluation.gold_standard import load_cases, load_study_config
+
+    try:
+        console.print(f"[bold]Loading study config:[/bold] {config_path}")
+        study_config = load_study_config(config_path)
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]Error loading config:[/red] {exc}")
+        raise typer.Exit(1)
+
+    try:
+        cases_dir = Path(study_config.cases_dir)
+        if not cases_dir.is_absolute():
+            cases_dir = config_path.parent / cases_dir
+        console.print(f"[bold]Loading cases from:[/bold] {cases_dir}")
+        cases = load_cases(cases_dir)
+        console.print(f"[green]Loaded {len(cases)} cases[/green]")
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]Error loading cases:[/red] {exc}")
+        raise typer.Exit(1)
+
+    runner = BatchRunner(study_config)
+
+    for provider_name in study_config.providers:
+        model_name = study_config.models.get(provider_name, _default_model(provider_name))
+        console.print(f"\n[bold cyan]Running {provider_name}/{model_name}[/bold cyan]")
+        console.print(f"  Cases: {len(cases)}")
+
+        try:
+            results = await runner.run_cases(cases, provider_name, model_name)
+            saved_path = runner.save_results(results, provider_name, model_name)
+            console.print(f"  [green]Results saved:[/green] {saved_path}")
+        except Exception as exc:
+            console.print(f"  [red]Error running {provider_name}:[/red] {exc}")
+            continue
+
+    console.print("\n[bold green]Study complete.[/bold green]")
+
+
+def _default_model(provider_name: str) -> str:
+    """Return default model name for a provider."""
+    defaults = {
+        "claude": "claude-sonnet-4-20250514",
+        "openai": "gpt-4o",
+        "local": "default",
+    }
+    return defaults.get(provider_name, "unknown")
 
 
 @app.command()

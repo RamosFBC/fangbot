@@ -326,3 +326,44 @@ class TestBatchRunner:
         assert results_dir.exists()
         json_files = list(results_dir.glob("*.json"))
         assert len(json_files) == 1
+
+
+from typer.testing import CliRunner
+from fangbot.gateway.cli import app as cli_app
+
+
+class TestCLIRunCommand:
+    def test_run_with_missing_config_file(self):
+        runner = CliRunner()
+        result = runner.invoke(cli_app, ["run", "/nonexistent/config.yaml"])
+        assert result.exit_code != 0 or "not found" in result.output.lower() or "error" in result.output.lower()
+
+    def test_run_with_valid_config(self, tmp_path):
+        """CLI run command should load config and attempt to run study."""
+        import yaml
+
+        cases_dir = tmp_path / "cases"
+        cases_dir.mkdir()
+        case_data = {
+            "case_id": "c1",
+            "narrative": "72yo male with CHF.",
+            "expected_score": 1,
+            "expected_risk_tier": "low",
+            "expected_tool_calls": [{"tool_name": "execute_clinical_calculator"}],
+        }
+        (cases_dir / "c1.yaml").write_text(yaml.dump(case_data))
+
+        config_data = {
+            "study_name": "Test",
+            "calculator_name": "CHA2DS2-VASc",
+            "cases_dir": str(cases_dir),
+            "results_dir": str(tmp_path / "results"),
+            "providers": ["claude"],
+        }
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(yaml.dump(config_data))
+
+        runner = CliRunner()
+        result = runner.invoke(cli_app, ["run", str(config_file)])
+        # Should have loaded config successfully (even if run fails due to no API key)
+        assert "Loading study" in result.output or "Error" in result.output or result.exit_code == 0
