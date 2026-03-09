@@ -119,3 +119,29 @@ CATEGORY_STYLES: dict[str, str] = {
     "legacy": "dim",
     "local": "bold green",
 }
+
+
+async def discover_local_models(base_url: str) -> list[ModelInfo]:
+    """Query a local OpenAI-compatible server for available models.
+
+    Returns an empty list if the server is unreachable.
+    """
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{base_url}/models")
+            if response.status_code != 200:
+                return []
+            data = response.json().get("data", [])
+            return [
+                ModelInfo(
+                    id=m["id"],
+                    name=m["id"],
+                    description="Local model",
+                    category="local",
+                )
+                for m in data
+            ]
+    except Exception:
+        return []
