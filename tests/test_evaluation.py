@@ -180,3 +180,78 @@ class TestLoadCases:
 
         with pytest.raises(ValueError, match="bad_case.yaml"):
             load_cases(cases_dir)
+
+
+from fangbot.evaluation.models import CaseResult
+from fangbot.evaluation.report import generate_report
+
+
+def _make_gold(case_id, score, tier):
+    return GoldStandardCase(
+        case_id=case_id,
+        narrative=f"Patient {case_id}.",
+        expected_score=score,
+        expected_risk_tier=tier,
+        expected_tool_calls=[ExpectedToolCall(tool_name="execute_clinical_calculator")],
+    )
+
+
+def _make_result(case_id, score, tier, tool_calls=None):
+    return CaseResult(
+        case_id=case_id,
+        provider="claude",
+        model="claude-sonnet-4-20250514",
+        actual_score=score,
+        actual_risk_tier=tier,
+        actual_tool_calls=tool_calls
+        if tool_calls is not None
+        else ["search_clinical_calculators", "execute_clinical_calculator"],
+        chain_of_thought=["Step 1"],
+        guardrail_passed=True,
+    )
+
+
+class TestReportGenerator:
+    def test_generates_markdown(self):
+        golds = [
+            _make_gold("c1", 2, RiskTier.MODERATE),
+            _make_gold("c2", 5, RiskTier.HIGH),
+        ]
+        results_by_provider = {
+            "claude/claude-sonnet-4-20250514": [
+                _make_result("c1", 2, RiskTier.MODERATE),
+                _make_result("c2", 5, RiskTier.HIGH),
+            ],
+        }
+        report = generate_report("CHA2DS2-VASc", golds, results_by_provider)
+        assert "# CHA2DS2-VASc Evaluation Report" in report
+        assert "accuracy" in report.lower()
+        assert "claude" in report.lower()
+
+    def test_multiple_providers(self):
+        golds = [_make_gold("c1", 2, RiskTier.MODERATE)]
+        results_by_provider = {
+            "claude/claude-sonnet-4-20250514": [_make_result("c1", 2, RiskTier.MODERATE)],
+            "openai/gpt-4o": [
+                CaseResult(
+                    case_id="c1",
+                    provider="openai",
+                    model="gpt-4o",
+                    actual_score=3,
+                    actual_risk_tier=RiskTier.HIGH,
+                    actual_tool_calls=["execute_clinical_calculator"],
+                    guardrail_passed=True,
+                ),
+            ],
+        }
+        report = generate_report("CHA2DS2-VASc", golds, results_by_provider)
+        assert "claude" in report.lower()
+        assert "openai" in report.lower()
+
+    def test_report_includes_per_case_table(self):
+        golds = [_make_gold("c1", 2, RiskTier.MODERATE)]
+        results_by_provider = {
+            "claude/claude-sonnet-4-20250514": [_make_result("c1", 2, RiskTier.MODERATE)],
+        }
+        report = generate_report("CHA2DS2-VASc", golds, results_by_provider)
+        assert "case" in report.lower() or "Case" in report
