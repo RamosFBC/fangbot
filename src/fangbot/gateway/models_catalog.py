@@ -81,6 +81,18 @@ CLAUDE_MODELS: list[ModelInfo] = [
 ]
 
 # ---------------------------------------------------------------------------
+# Local provider presets
+# ---------------------------------------------------------------------------
+
+LOCAL_PRESETS: dict[str, tuple[str, str]] = {
+    # name -> (default_base_url, default_model)
+    "ollama": ("http://localhost:11434/v1", "llama3.2"),
+    "lmstudio": ("http://localhost:1234/v1", "default"),
+    "vllm": ("http://localhost:8000/v1", "default"),
+    "local": ("http://localhost:11434/v1", "default"),
+}
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -92,6 +104,10 @@ PROVIDER_MODELS: dict[str, list[ModelInfo]] = {
 PROVIDER_DEFAULTS: dict[str, str] = {
     "claude": "claude-sonnet-4-20250514",
     "openai": "gpt-4o",
+    "ollama": "llama3.2",
+    "lmstudio": "default",
+    "vllm": "default",
+    "local": "default",
 }
 
 CATEGORY_STYLES: dict[str, str] = {
@@ -101,4 +117,5 @@ CATEGORY_STYLES: dict[str, str] = {
     "reasoning": "bold yellow",
     "coding": "bold blue",
     "legacy": "dim",
+    "local": "bold green",
 }

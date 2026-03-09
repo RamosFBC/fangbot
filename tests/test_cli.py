@@ -12,7 +12,7 @@ from fangbot.gateway.cli import (
     _handle_slash_command,
     app,
 )
-from fangbot.gateway.models_catalog import PROVIDER_DEFAULTS, PROVIDER_MODELS
+from fangbot.gateway.models_catalog import LOCAL_PRESETS, PROVIDER_DEFAULTS, PROVIDER_MODELS
 from fangbot.config import Settings
 
 runner = CliRunner()
@@ -189,11 +189,15 @@ class TestSlashCommands:
 class TestModelsCatalog:
     def test_all_providers_have_models(self):
         for provider in PROVIDER_DEFAULTS:
+            if provider in LOCAL_PRESETS:
+                continue  # local providers use dynamic discovery, no static catalog
             assert provider in PROVIDER_MODELS
             assert len(PROVIDER_MODELS[provider]) > 0
 
     def test_defaults_exist_in_catalog(self):
         for provider, default_model in PROVIDER_DEFAULTS.items():
+            if provider in LOCAL_PRESETS:
+                continue  # local providers use dynamic discovery, no static catalog
             model_ids = {m.id for m in PROVIDER_MODELS[provider]}
             assert default_model in model_ids, f"Default {default_model} not in {provider} catalog"
 

@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     google_api_key: str = ""
+    local_base_url: str = ""
+    local_api_key: str = ""
     model: str = "claude-sonnet-4-20250514"
 
     # MCP server — production default assumes open-medicine-mcp is on PATH
