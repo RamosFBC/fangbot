@@ -49,6 +49,9 @@ logs/
 # Claude Code
 .claude/
 
+# Git worktrees
+.worktrees/
+
 # Ruff
 .ruff_cache/
 
