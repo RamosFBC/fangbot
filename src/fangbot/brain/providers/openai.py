@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
-import uuid
 
 import openai
 
@@ -20,7 +18,12 @@ from fangbot.models import (
 
 
 class OpenAIProvider(LLMProvider):
-    """OpenAI GPT provider with tool-use support."""
+    """OpenAI GPT provider with tool-use support.
+
+    Tries the Chat Completions API first. If the model returns a 404
+    ("not a chat model" / "not supported"), falls back automatically
+    to the Responses API for the rest of the session.
+    """
 
     # Models that don't support custom temperature (reasoning + newer GPT-5 variants)
     _NO_TEMPERATURE_PREFIXES = ("o1", "o3", "o4", "gpt-5")
@@ -28,7 +31,7 @@ class OpenAIProvider(LLMProvider):
     def __init__(self, api_key: str | None = None, model: str = "gpt-4o"):
         self._client = openai.AsyncOpenAI(api_key=api_key)
         self._model = model
-        self._use_completions = False
+        self._use_responses_api = False
 
     @property
     def model_name(self) -> str:
@@ -43,8 +46,8 @@ class OpenAIProvider(LLMProvider):
         tools: list[ToolDefinition] | None = None,
         system: str | None = None,
     ) -> ProviderResponse:
-        if self._use_completions:
-            return await self._call_completions(messages, tools, system)
+        if self._use_responses_api:
+            return await self._call_responses(messages, tools, system)
 
         oai_messages = self._format_messages(messages, system)
 
@@ -60,9 +63,9 @@ class OpenAIProvider(LLMProvider):
         try:
             response = await self._client.chat.completions.create(**kwargs)
         except openai.NotFoundError as e:
-            if "not a chat model" in str(e):
-                self._use_completions = True
-                return await self._call_completions(messages, tools, system)
+            if "not a chat model" in str(e) or "not supported" in str(e):
+                self._use_responses_api = True
+                return await self._call_responses(messages, tools, system)
             raise
 
         return self._parse_response(response)
@@ -73,6 +76,10 @@ class OpenAIProvider(LLMProvider):
             content=result.content,
             tool_call_id=result.tool_call_id,
         )
+
+    # ------------------------------------------------------------------
+    # Chat Completions formatting
+    # ------------------------------------------------------------------
 
     def _format_messages(self, messages: list[Message], system: str | None) -> list[dict]:
         """Convert normalized messages to OpenAI chat format."""
@@ -161,119 +168,113 @@ class OpenAIProvider(LLMProvider):
         )
 
     # ------------------------------------------------------------------
-    # Completions API fallback for non-chat models
+    # Responses API fallback for models that don't support chat
     # ------------------------------------------------------------------
 
-    async def _call_completions(
+    async def _call_responses(
         self,
         messages: list[Message],
         tools: list[ToolDefinition] | None = None,
         system: str | None = None,
     ) -> ProviderResponse:
-        """Fall back to /v1/completions for models that don't support chat."""
-        prompt = self._format_prompt(messages, tools, system)
+        """Use the Responses API (/v1/responses) for Responses-only models."""
+        input_items = self._format_responses_input(messages)
 
         kwargs: dict = {
             "model": self._model,
-            "prompt": prompt,
-            "max_tokens": 4096,
+            "input": input_items,
         }
+        if system:
+            kwargs["instructions"] = system
         if self._supports_temperature():
             kwargs["temperature"] = 0.0
-
-        response = await self._client.completions.create(**kwargs)
-        return self._parse_completions_response(response, tools)
-
-    def _format_prompt(
-        self,
-        messages: list[Message],
-        tools: list[ToolDefinition] | None = None,
-        system: str | None = None,
-    ) -> str:
-        """Convert messages and tools into a single prompt string."""
-        parts: list[str] = []
-
-        if system:
-            parts.append(f"System: {system}")
-
         if tools:
-            tool_descriptions = []
-            for t in tools:
-                schema = json.dumps(t.input_schema, indent=2)
-                tool_descriptions.append(f"- {t.name}: {t.description}\n  Parameters: {schema}")
-            parts.append(
-                "Available tools:\n" + "\n".join(tool_descriptions) + "\n\n"
-                "To call a tool, respond with a JSON block:\n"
-                "```json\n"
-                '{"tool_calls": [{"name": "tool_name", "arguments": {...}}]}\n'
-                "```\n"
-                "You may include reasoning text before the JSON block."
-            )
+            kwargs["tools"] = [self._format_responses_tool(t) for t in tools]
+
+        response = await self._client.responses.create(**kwargs)
+        return self._parse_responses_response(response)
+
+    def _format_responses_input(self, messages: list[Message]) -> list[dict]:
+        """Convert normalized messages to Responses API input format."""
+        input_items: list[dict] = []
 
         for msg in messages:
             if msg.role == Role.SYSTEM:
-                parts.append(f"System: {msg.content}")
-            elif msg.role == Role.USER:
-                parts.append(f"User: {msg.content}")
-            elif msg.role == Role.ASSISTANT:
-                parts.append(f"Assistant: {msg.content}")
-            elif msg.role == Role.TOOL:
-                parts.append(f"Tool result ({msg.tool_call_id}): {msg.content}")
+                # System messages become instructions; skip here (handled via kwarg)
+                continue
+            elif msg.tool_calls:
+                # Assistant text + function_call items
+                if msg.content:
+                    input_items.append({"role": "assistant", "content": msg.content})
+                for tc in msg.tool_calls:
+                    input_items.append(
+                        {
+                            "type": "function_call",
+                            "name": tc.name,
+                            "arguments": json.dumps(tc.arguments),
+                            "call_id": tc.id,
+                        }
+                    )
+            elif msg.tool_call_id:
+                # Tool result → function_call_output
+                input_items.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": msg.tool_call_id,
+                        "output": msg.content,
+                    }
+                )
+            else:
+                input_items.append(
+                    {
+                        "role": msg.role.value,
+                        "content": msg.content,
+                    }
+                )
 
-        parts.append("Assistant:")
-        return "\n\n".join(parts)
-
-    def _parse_completions_response(
-        self,
-        response: openai.types.Completion,
-        tools: list[ToolDefinition] | None = None,
-    ) -> ProviderResponse:
-        """Parse a completions response, extracting any tool calls from JSON blocks."""
-        choice = response.choices[0]
-        text = choice.text or ""
-
-        tool_calls: list[ToolCall] = []
-        content = text
-
-        if tools:
-            tool_calls, content = self._extract_tool_calls(text)
-
-        return ProviderResponse(
-            content=content.strip(),
-            tool_calls=tool_calls,
-            stop_reason=choice.finish_reason or "",
-            usage={
-                "input_tokens": response.usage.prompt_tokens if response.usage else 0,
-                "output_tokens": response.usage.completion_tokens if response.usage else 0,
-            },
-            model=response.model,
-        )
+        return input_items
 
     @staticmethod
-    def _extract_tool_calls(text: str) -> tuple[list[ToolCall], str]:
-        """Extract tool calls from JSON code blocks in completion text.
+    def _format_responses_tool(tool: ToolDefinition) -> dict:
+        """Convert a ToolDefinition to Responses API tool format."""
+        return {
+            "type": "function",
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": tool.input_schema,
+        }
 
-        Returns (tool_calls, remaining_text).
-        """
-        pattern = r"```json\s*(\{.*?\})\s*```"
-        matches = re.findall(pattern, text, re.DOTALL)
-
+    @staticmethod
+    def _parse_responses_response(response) -> ProviderResponse:
+        """Parse a Responses API response into normalized ProviderResponse."""
+        content_parts: list[str] = []
         tool_calls: list[ToolCall] = []
-        for match in matches:
-            try:
-                parsed = json.loads(match)
-                calls = parsed.get("tool_calls", [])
-                for tc in calls:
-                    tool_calls.append(
-                        ToolCall(
-                            id=f"call_{uuid.uuid4().hex[:12]}",
-                            name=tc["name"],
-                            arguments=tc.get("arguments", {}),
-                        )
-                    )
-            except (json.JSONDecodeError, KeyError):
-                continue
 
-        # Remove JSON blocks from content to get the reasoning text
-        content = re.sub(r"```json\s*\{.*?\}\s*```", "", text, flags=re.DOTALL)
-        return tool_calls, content
+        for item in response.output:
+            if item.type == "message":
+                for part in item.content:
+                    if hasattr(part, "text"):
+                        content_parts.append(part.text)
+            elif item.type == "function_call":
+                tool_calls.append(
+                    ToolCall(
+                        id=item.call_id,
+                        name=item.name,
+                        arguments=json.loads(item.arguments),
+                    )
+                )
+
+        usage = {}
+        if hasattr(response, "usage") and response.usage:
+            usage = {
+                "input_tokens": getattr(response.usage, "input_tokens", 0),
+                "output_tokens": getattr(response.usage, "output_tokens", 0),
+            }
+
+        return ProviderResponse(
+            content="\n".join(content_parts),
+            tool_calls=tool_calls,
+            stop_reason=response.status if hasattr(response, "status") else "",
+            usage=usage,
+            model=response.model if hasattr(response, "model") else "",
+        )
