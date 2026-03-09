@@ -44,7 +44,7 @@ Changelog = "https://github.com/RamosFBC/fangbot/blob/main/CHANGELOG.md"
 [project.optional-dependencies]
 openai = ["openai>=1.0.0"]
 gemini = ["google-genai>=1.0.0"]
-ollama = ["ollama>=0.4.0"]
+local = ["openai>=1.0.0"]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
