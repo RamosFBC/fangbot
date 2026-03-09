@@ -87,3 +87,96 @@ class TestRiskTier:
         assert RiskTier.LOW.value == "low"
         assert RiskTier.MODERATE.value == "moderate"
         assert RiskTier.HIGH.value == "high"
+
+
+import yaml
+
+from fangbot.evaluation.gold_standard import load_cases, load_study_config
+
+
+class TestLoadStudyConfig:
+    def test_load_valid_config(self, tmp_path):
+        config_data = {
+            "study_name": "CHA2DS2-VASc Scoring",
+            "calculator_name": "CHA2DS2-VASc",
+            "description": "Test study",
+            "cases_dir": "cases",
+            "results_dir": "results",
+        }
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(yaml.dump(config_data))
+
+        config = load_study_config(config_file)
+        assert config.study_name == "CHA2DS2-VASc Scoring"
+        assert config.calculator_name == "CHA2DS2-VASc"
+
+    def test_load_config_file_not_found(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            load_study_config(tmp_path / "nonexistent.yaml")
+
+    def test_load_config_invalid_yaml(self, tmp_path):
+        bad_file = tmp_path / "bad.yaml"
+        bad_file.write_text("not: valid: yaml: {{{{")
+        with pytest.raises(ValueError, match="Invalid YAML"):
+            load_study_config(bad_file)
+
+
+class TestLoadCases:
+    def _write_case(self, cases_dir, case_id, score, tier="low"):
+        case_data = {
+            "case_id": case_id,
+            "narrative": f"Patient for {case_id}.",
+            "expected_score": score,
+            "expected_risk_tier": tier,
+            "expected_tool_calls": [
+                {"tool_name": "execute_clinical_calculator"},
+            ],
+        }
+        case_file = cases_dir / f"{case_id}.yaml"
+        case_file.write_text(yaml.dump(case_data))
+
+    def test_load_cases_from_directory(self, tmp_path):
+        cases_dir = tmp_path / "cases"
+        cases_dir.mkdir()
+        self._write_case(cases_dir, "case_001", 2, "moderate")
+        self._write_case(cases_dir, "case_002", 5, "high")
+
+        cases = load_cases(cases_dir)
+        assert len(cases) == 2
+        ids = {c.case_id for c in cases}
+        assert ids == {"case_001", "case_002"}
+
+    def test_load_cases_sorted_by_id(self, tmp_path):
+        cases_dir = tmp_path / "cases"
+        cases_dir.mkdir()
+        self._write_case(cases_dir, "case_003", 1)
+        self._write_case(cases_dir, "case_001", 2)
+        self._write_case(cases_dir, "case_002", 3)
+
+        cases = load_cases(cases_dir)
+        assert [c.case_id for c in cases] == ["case_001", "case_002", "case_003"]
+
+    def test_load_cases_empty_directory(self, tmp_path):
+        cases_dir = tmp_path / "cases"
+        cases_dir.mkdir()
+
+        with pytest.raises(ValueError, match="No .yaml case files"):
+            load_cases(cases_dir)
+
+    def test_load_cases_skips_non_yaml(self, tmp_path):
+        cases_dir = tmp_path / "cases"
+        cases_dir.mkdir()
+        self._write_case(cases_dir, "case_001", 2)
+        (cases_dir / "README.md").write_text("# Notes")
+
+        cases = load_cases(cases_dir)
+        assert len(cases) == 1
+
+    def test_load_cases_validation_error_includes_filename(self, tmp_path):
+        cases_dir = tmp_path / "cases"
+        cases_dir.mkdir()
+        bad_case = cases_dir / "bad_case.yaml"
+        bad_case.write_text(yaml.dump({"case_id": "bad", "narrative": ""}))
+
+        with pytest.raises(ValueError, match="bad_case.yaml"):
+            load_cases(cases_dir)
