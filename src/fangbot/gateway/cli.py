@@ -242,6 +242,65 @@ async def _cmd_openai(state: ChatState, args: list[str]) -> bool:
     return True
 
 
+async def _switch_local(state: ChatState, args: list[str], preset: str) -> bool:
+    """Switch to a local provider preset, with optional model selection."""
+    if args:
+        model = args[0]
+    else:
+        # Try dynamic discovery
+        from fangbot.gateway.models_catalog import LOCAL_PRESETS, discover_local_models
+
+        default_url, _ = LOCAL_PRESETS[preset]
+        base_url = state.settings.local_base_url or default_url
+        console.print(f"[dim]Querying {base_url} for available models...[/dim]")
+
+        models = await discover_local_models(base_url)
+        if models:
+            PROVIDER_MODELS[preset] = models
+            model = _select_model_interactive(preset, getattr(state.provider, "model_name", ""))
+            if model is None:
+                console.print("[dim]Cancelled.[/dim]")
+                return True
+        else:
+            console.print("[yellow]Could not reach server — enter model name manually.[/yellow]")
+            try:
+                model = console.input("[bold cyan]Model name:[/bold cyan] ").strip()
+            except (EOFError, KeyboardInterrupt):
+                return True
+            if not model:
+                console.print("[dim]Cancelled.[/dim]")
+                return True
+
+    try:
+        state.provider = _create_provider(preset, state.settings, model)
+        state.provider_name = preset
+        state._rebuild_react()
+        console.print(f"[green]Switched to {preset} ({state.provider.model_name})[/green]")
+    except Exception as e:
+        console.print(f"[red]Failed to switch: {e}[/red]")
+    return True
+
+
+@slash_command("local", "Switch to local LLM (optional: /local <model>)")
+async def _cmd_local(state: ChatState, args: list[str]) -> bool:
+    return await _switch_local(state, args, "local")
+
+
+@slash_command("ollama", "Switch to Ollama (optional: /ollama <model>)")
+async def _cmd_ollama(state: ChatState, args: list[str]) -> bool:
+    return await _switch_local(state, args, "ollama")
+
+
+@slash_command("lmstudio", "Switch to LM Studio (optional: /lmstudio <model>)")
+async def _cmd_lmstudio(state: ChatState, args: list[str]) -> bool:
+    return await _switch_local(state, args, "lmstudio")
+
+
+@slash_command("vllm", "Switch to vLLM (optional: /vllm <model>)")
+async def _cmd_vllm(state: ChatState, args: list[str]) -> bool:
+    return await _switch_local(state, args, "vllm")
+
+
 @slash_command("model", "Switch model — interactive picker or /model <name>")
 async def _cmd_model(state: ChatState, args: list[str]) -> bool:
     if args:
