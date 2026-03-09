@@ -17,6 +17,7 @@ console = Console()
 PROVIDERS = {
     "1": ("claude", "ANTHROPIC_API_KEY", "Anthropic Claude"),
     "2": ("openai", "OPENAI_API_KEY", "OpenAI"),
+    "3": ("ollama", "", "Local (Ollama, LM Studio, vLLM)"),
 }
 
 
@@ -39,17 +40,18 @@ def _prompt_provider() -> tuple[str, str, str]:
     table.add_column("Description")
     table.add_row("1", "Claude", "Anthropic Claude (recommended for clinical reasoning)")
     table.add_row("2", "OpenAI", "GPT-4o, GPT-5, o-series reasoning models")
+    table.add_row("3", "Local", "Ollama, LM Studio, vLLM (no API key needed)")
     console.print(table)
     console.print()
 
     while True:
         try:
-            choice = console.input("[bold cyan]Select provider (1-2):[/bold cyan] ").strip()
+            choice = console.input("[bold cyan]Select provider (1-3):[/bold cyan] ").strip()
         except (EOFError, KeyboardInterrupt):
             raise SystemExit(0)
         if choice in PROVIDERS:
             return PROVIDERS[choice]
-        console.print("[red]Please enter 1 or 2.[/red]")
+        console.print("[red]Please enter 1, 2, or 3.[/red]")
 
 
 def _prompt_api_key(env_var: str, display_name: str) -> str:
@@ -65,7 +67,7 @@ def _prompt_api_key(env_var: str, display_name: str) -> str:
         console.print("[red]API key cannot be empty.[/red]")
 
 
-def _write_env_file(provider: str, env_var: str, api_key: str, mcp_command: str) -> Path:
+def _write_env_file(provider: str, env_var: str, api_key: str, mcp_command: str, base_url: str = "") -> Path:
     """Write the ~/.fangbot/.env file."""
     FANGBOT_HOME.mkdir(parents=True, exist_ok=True)
 
@@ -81,8 +83,11 @@ def _write_env_file(provider: str, env_var: str, api_key: str, mcp_command: str)
                 existing[k.strip()] = v.strip()
 
     # Update with new values
-    existing[env_var] = api_key
+    if env_var and api_key:
+        existing[env_var] = api_key
     existing["FANGBOT_PROVIDER"] = provider
+    if base_url:
+        existing["FANGBOT_LOCAL_BASE_URL"] = base_url
 
     # Set MCP command if using uv fallback
     if mcp_command == "uv":
@@ -154,12 +159,26 @@ def run_setup() -> None:
     # Step 2: Select provider and API key
     console.print("[bold]Step 2/3:[/bold] Configure LLM provider\n")
     provider, env_var, display_name = _prompt_provider()
-    api_key = _prompt_api_key(env_var, display_name)
+    api_key = ""
+    if env_var:
+        api_key = _prompt_api_key(env_var, display_name)
+    else:
+        console.print("[dim]No API key needed for local providers.[/dim]")
     console.print()
+
+    base_url = ""
+    if not env_var:
+        # Local provider — optionally configure base URL
+        try:
+            base_url = console.input(
+                "[bold cyan]Base URL (Enter for default http://localhost:11434/v1):[/bold cyan] "
+            ).strip()
+        except (EOFError, KeyboardInterrupt):
+            raise SystemExit(0)
 
     # Step 3: Write config and test connection
     console.print("[bold]Step 3/3:[/bold] Saving configuration and testing connection...")
-    env_path = _write_env_file(provider, env_var, api_key, mcp_command)
+    env_path = _write_env_file(provider, env_var, api_key, mcp_command, base_url)
     console.print(f"[green]  Config saved to {env_path}[/green]")
 
     # Create logs directory
