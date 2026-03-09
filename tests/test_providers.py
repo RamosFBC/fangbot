@@ -188,6 +188,187 @@ class TestOpenAIProvider:
         assert result.tool_call_id == "tc_1"
 
 
+class TestOpenAICompletionsFallback:
+    """Test completions API fallback for non-chat models."""
+
+    def _make_provider(self):
+        from fangbot.brain.providers.openai import OpenAIProvider
+
+        return OpenAIProvider(api_key="test-key", model="gpt-5.4-pro")
+
+    def test_extract_tool_calls_from_json_block(self):
+        provider = self._make_provider()
+        text = (
+            "I need to search for the calculator.\n\n"
+            "```json\n"
+            '{"tool_calls": [{"name": "search_clinical_calculators", '
+            '"arguments": {"query": "CHA2DS2-VASc"}}]}\n'
+            "```"
+        )
+        tool_calls, content = provider._extract_tool_calls(text)
+
+        assert len(tool_calls) == 1
+        assert tool_calls[0].name == "search_clinical_calculators"
+        assert tool_calls[0].arguments == {"query": "CHA2DS2-VASc"}
+        assert tool_calls[0].id.startswith("call_")
+        assert "search for the calculator" in content
+
+    def test_extract_tool_calls_no_json_block(self):
+        provider = self._make_provider()
+        text = "Just a plain response with no tool calls."
+        tool_calls, content = provider._extract_tool_calls(text)
+
+        assert tool_calls == []
+        assert content == text
+
+    def test_extract_tool_calls_invalid_json(self):
+        provider = self._make_provider()
+        text = "```json\n{invalid json}\n```"
+        tool_calls, content = provider._extract_tool_calls(text)
+
+        assert tool_calls == []
+
+    def test_extract_tool_calls_multiple(self):
+        provider = self._make_provider()
+        text = (
+            "```json\n"
+            '{"tool_calls": ['
+            '{"name": "search_clinical_calculators", "arguments": {"query": "GCS"}},'
+            '{"name": "execute_clinical_calculator", "arguments": {"id": "gcs", "params": {}}}'
+            "]}\n"
+            "```"
+        )
+        tool_calls, content = provider._extract_tool_calls(text)
+
+        assert len(tool_calls) == 2
+        assert tool_calls[0].name == "search_clinical_calculators"
+        assert tool_calls[1].name == "execute_clinical_calculator"
+
+    def test_format_prompt_includes_system_and_tools(self):
+        provider = self._make_provider()
+        messages = [Message(role=Role.USER, content="Calculate GCS")]
+        tools = [
+            ToolDefinition(
+                name="search_clinical_calculators",
+                description="Search for calculators",
+                input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+            )
+        ]
+
+        prompt = provider._format_prompt(messages, tools, system="You are helpful.")
+
+        assert "System: You are helpful." in prompt
+        assert "search_clinical_calculators" in prompt
+        assert "tool_calls" in prompt
+        assert "User: Calculate GCS" in prompt
+        assert prompt.endswith("Assistant:")
+
+    def test_format_prompt_without_tools(self):
+        provider = self._make_provider()
+        messages = [
+            Message(role=Role.USER, content="Hello"),
+            Message(role=Role.ASSISTANT, content="Hi there"),
+            Message(role=Role.USER, content="How are you?"),
+        ]
+
+        prompt = provider._format_prompt(messages, tools=None, system=None)
+
+        assert "User: Hello" in prompt
+        assert "Assistant: Hi there" in prompt
+        assert "User: How are you?" in prompt
+        assert prompt.endswith("Assistant:")
+        assert "Available tools" not in prompt
+
+    @pytest.mark.asyncio
+    async def test_call_falls_back_to_completions_on_404(self):
+        """Test that a 'not a chat model' 404 triggers completions fallback."""
+        import openai as oai
+
+        provider = self._make_provider()
+
+        # First call to chat.completions raises NotFoundError
+        error_body = {
+            "error": {"message": "This is not a chat model", "type": "invalid_request_error"}
+        }
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.json.return_value = error_body
+        mock_response.headers = {}
+        mock_response.text = json.dumps(error_body)
+
+        provider._client.chat.completions.create = AsyncMock(
+            side_effect=oai.NotFoundError(
+                message="This is not a chat model",
+                response=mock_response,
+                body=error_body,
+            )
+        )
+
+        # Completions endpoint succeeds
+        mock_choice = MagicMock()
+        mock_choice.text = (
+            "Let me search.\n\n"
+            "```json\n"
+            '{"tool_calls": [{"name": "search_clinical_calculators", "arguments": {"query": "GCS"}}]}\n'
+            "```"
+        )
+        mock_choice.finish_reason = "stop"
+
+        mock_completions_response = MagicMock()
+        mock_completions_response.choices = [mock_choice]
+        mock_completions_response.usage = MagicMock(prompt_tokens=50, completion_tokens=30)
+        mock_completions_response.model = "gpt-5.4-pro"
+
+        provider._client.completions.create = AsyncMock(return_value=mock_completions_response)
+
+        tools = [
+            ToolDefinition(
+                name="search_clinical_calculators",
+                description="Search",
+                input_schema={"type": "object"},
+            )
+        ]
+        result = await provider.call(
+            messages=[Message(role=Role.USER, content="Calculate GCS")],
+            tools=tools,
+            system="You are a clinical assistant.",
+        )
+
+        assert "Let me search" in result.content
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0].name == "search_clinical_calculators"
+        assert result.model == "gpt-5.4-pro"
+        # Subsequent calls should go directly to completions
+        assert provider._use_completions is True
+
+    @pytest.mark.asyncio
+    async def test_completions_direct_call(self):
+        """Test direct completions call when _use_completions is already set."""
+        provider = self._make_provider()
+        provider._use_completions = True
+
+        mock_choice = MagicMock()
+        mock_choice.text = "The GCS score is 15."
+        mock_choice.finish_reason = "stop"
+
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.usage = MagicMock(prompt_tokens=30, completion_tokens=10)
+        mock_response.model = "gpt-5.4-pro"
+
+        provider._client.completions.create = AsyncMock(return_value=mock_response)
+
+        result = await provider.call(
+            messages=[Message(role=Role.USER, content="What is the GCS?")],
+            system="Be helpful.",
+        )
+
+        assert result.content == "The GCS score is 15."
+        assert result.tool_calls == []
+        # completions endpoint was called
+        provider._client.completions.create.assert_called_once()
+
+
 class TestLocalProvider:
     """Test LocalProvider — subclasses OpenAI with custom base_url."""
 

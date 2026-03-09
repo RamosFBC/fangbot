@@ -18,6 +18,7 @@ class LocalProvider(OpenAIProvider):
     ):
         self._client = openai.AsyncOpenAI(base_url=base_url, api_key=api_key)
         self._model = model
+        self._use_completions = False
 
     def _supports_temperature(self) -> bool:
         return True
