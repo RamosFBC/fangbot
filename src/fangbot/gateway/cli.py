@@ -17,6 +17,7 @@ from rich.text import Text
 from fangbot.config import Settings, get_settings
 from fangbot.gateway.models_catalog import (
     CATEGORY_STYLES,
+    LOCAL_PRESETS,
     PROVIDER_DEFAULTS,
     PROVIDER_MODELS,
     ModelInfo,
@@ -50,6 +51,14 @@ def _create_provider(name: str, settings: Settings, model: str | None = None):
         from fangbot.brain.providers.openai import OpenAIProvider
 
         return OpenAIProvider(api_key=settings.openai_api_key or None, model=resolved_model)
+    elif name in LOCAL_PRESETS:
+        from fangbot.brain.providers.local import LocalProvider
+
+        default_url, default_model = LOCAL_PRESETS[name]
+        base_url = settings.local_base_url or default_url
+        api_key = settings.local_api_key or "not-needed"
+        resolved_model = model or resolved_model or default_model
+        return LocalProvider(base_url=base_url, model=resolved_model, api_key=api_key)
     else:
         raise ValueError(f"Unknown provider: {name}")
 
