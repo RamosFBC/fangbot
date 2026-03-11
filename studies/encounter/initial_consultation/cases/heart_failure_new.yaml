@@ -1,0 +1,60 @@
+case_id: "initial_consult_hf_005"
+encounter_type: "initial_consultation"
+narrative: >
+  A 63-year-old male presents as a new patient with progressive exertional
+  dyspnea over 3 months and bilateral lower extremity edema for 2 weeks.
+  He can walk about half a block before becoming short of breath. He sleeps
+  with 3 pillows and occasionally wakes up at night feeling breathless.
+  Past medical history: hypertension (10 years), type 2 diabetes (8 years),
+  obesity. Medications: hydrochlorothiazide 25mg daily, metformin 500mg
+  twice daily. No drug allergies. Social history: former smoker (quit 5
+  years ago, 20 pack-year history). Vitals: BP 152/94, HR 88, RR 20,
+  SpO2 94% on room air. Exam: JVD present, bilateral crackles at lung
+  bases, 2+ pitting edema bilaterally, S3 gallop appreciated.
+
+expected_tool_invocations: []
+
+expected_reasoning:
+  - "Identified heart failure presentation"
+  - "Assessed NYHA functional class"
+  - "Considered etiology and workup"
+
+expected_decisions:
+  - category: "diagnostic"
+    decision: "Order echocardiogram"
+    acceptable: ["echocardiogram", "echo", "TTE", "transthoracic"]
+    reasoning: "New heart failure requires assessment of EF and structure"
+  - category: "diagnostic"
+    decision: "Order BNP or NT-proBNP"
+    acceptable: ["BNP", "NT-proBNP", "natriuretic peptide", "brain natriuretic"]
+    reasoning: "Biomarker for heart failure diagnosis and severity"
+  - category: "medication"
+    decision: "Initiate diuretic for volume overload"
+    acceptable: ["furosemide", "lasix", "loop diuretic", "diuretic", "bumetanide"]
+    reasoning: "Symptomatic volume overload with edema and crackles"
+  - category: "medication"
+    decision: "Initiate ACEi or ARB"
+    acceptable: ["ACE inhibitor", "ARB", "lisinopril", "enalapril", "losartan", "valsartan"]
+    contraindicated: ["No RAAS inhibitor initiated"]
+    reasoning: "First-line HF therapy with hypertension"
+  - category: "referral"
+    decision: "Cardiology referral"
+    acceptable: ["cardiology", "cardiologist", "heart failure specialist"]
+    reasoning: "New heart failure diagnosis requires specialist evaluation"
+  - category: "disposition"
+    decision: "Consider urgent evaluation vs. close outpatient follow-up"
+    acceptable: ["urgent", "close follow-up", "within 1 week", "consider ED", "same-day", "expedited"]
+    reasoning: "New HF with significant symptoms may warrant urgent workup"
+
+required_elements:
+  - "medication_reconciliation"
+  - "allergy"
+
+forbidden_elements:
+  - "Dismissed dyspnea without cardiac evaluation"
+  - "Continued hydrochlorothiazide without switching to loop diuretic"
+
+skill_loaded: "initial_consultation"
+notes: >
+  NYHA class III based on symptoms. Key: switch HCTZ to loop diuretic,
+  start ACEi, order echo + BNP. Agent should recognize urgency.

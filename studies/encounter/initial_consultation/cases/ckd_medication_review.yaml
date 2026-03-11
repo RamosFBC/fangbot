@@ -1,0 +1,51 @@
+case_id: "initial_consult_ckd_004"
+encounter_type: "initial_consultation"
+narrative: >
+  A 67-year-old female is referred as a new patient for management of
+  chronic kidney disease stage 3b. She has a history of type 2 diabetes
+  (15 years), hypertension, and gout. Current medications: metformin 1000mg
+  twice daily, glipizide 10mg twice daily, lisinopril 40mg daily,
+  amlodipine 10mg daily, allopurinol 300mg daily, ibuprofen 400mg as
+  needed for joint pain (takes 2-3 times per week). No drug allergies.
+  Latest labs: creatinine 1.8 mg/dL, BUN 32, potassium 4.8, HbA1c 7.4%,
+  eGFR reported as 29 mL/min (by lab). Weight 75 kg, age 67, female.
+
+expected_tool_invocations:
+  - tool: "CKD-EPI"
+    reason: "Verify GFR calculation for medication dosing"
+
+expected_reasoning:
+  - "Identified chronic kidney disease"
+  - "Assessed renal function"
+  - "Reviewed medications for renal dosing"
+
+expected_decisions:
+  - category: "medication"
+    decision: "Discontinue or reduce ibuprofen"
+    acceptable: ["discontinue ibuprofen", "stop ibuprofen", "avoid NSAIDs", "stop NSAID", "reduce ibuprofen"]
+    contraindicated: ["continue ibuprofen at current dose"]
+    reasoning: "NSAIDs contraindicated in CKD — nephrotoxic and hyperkalemia risk"
+  - category: "medication"
+    decision: "Review metformin dose for renal function"
+    acceptable: ["reduce metformin", "adjust metformin", "metformin dose", "renal dosing"]
+    reasoning: "Metformin requires dose adjustment at eGFR < 30"
+  - category: "diagnostic"
+    decision: "Order comprehensive renal panel"
+    acceptable: ["labs", "renal panel", "CMP", "urine albumin", "UACR", "proteinuria"]
+    reasoning: "Baseline assessment for CKD management"
+  - category: "referral"
+    decision: "Nephrology referral"
+    acceptable: ["nephrology", "nephrologist", "kidney specialist"]
+    reasoning: "CKD stage 3b with eGFR < 30 warrants nephrology co-management"
+
+required_elements:
+  - "medication_reconciliation"
+  - "allergy"
+
+forbidden_elements:
+  - "Continued ibuprofen without addressing renal risk"
+
+skill_loaded: "initial_consultation"
+notes: >
+  Key test: agent must catch the NSAID use in CKD and the metformin dosing
+  concern with borderline eGFR. Should invoke CKD-EPI for verification.

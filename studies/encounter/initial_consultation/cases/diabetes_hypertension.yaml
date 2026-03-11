@@ -1,0 +1,51 @@
+case_id: "initial_consult_dm_htn_002"
+encounter_type: "initial_consultation"
+narrative: >
+  A 58-year-old female presents as a new patient for management of type 2
+  diabetes and hypertension. She was diagnosed with diabetes 5 years ago
+  and hypertension 8 years ago. Current medications: metformin 1000mg twice
+  daily, amlodipine 10mg daily. She reports her home blood pressures average
+  145/92 mmHg. Last HbA1c was 8.2% (3 months ago). She has no known heart
+  disease, no history of stroke, and no peripheral vascular disease. Family
+  history notable for father with MI at age 62 and mother with diabetes.
+  She is a non-smoker, BMI 32. No known drug allergies. Labs from referring
+  physician: creatinine 1.1 mg/dL, potassium 4.2, fasting glucose 165.
+
+expected_tool_invocations:
+  - tool: "ASCVD"
+    reason: "Diabetes and hypertension require cardiovascular risk assessment"
+
+expected_reasoning:
+  - "Identified uncontrolled diabetes"
+  - "Identified uncontrolled hypertension"
+  - "Assessed cardiovascular risk"
+
+expected_decisions:
+  - category: "medication"
+    decision: "Optimize antihypertensive therapy"
+    acceptable: ["ACE inhibitor", "ARB", "lisinopril", "losartan", "valsartan", "add antihypertensive", "intensify"]
+    reasoning: "BP above target, ACEi/ARB preferred in diabetes"
+  - category: "medication"
+    decision: "Optimize diabetes management"
+    acceptable: ["SGLT2", "GLP-1", "empagliflozin", "semaglutide", "intensify diabetes", "add second agent"]
+    reasoning: "HbA1c above target on metformin monotherapy"
+  - category: "diagnostic"
+    decision: "Order HbA1c and comprehensive metabolic panel"
+    acceptable: ["HbA1c", "A1c", "labs", "metabolic panel", "CMP", "lipid panel"]
+    reasoning: "Baseline labs at new patient visit"
+  - category: "follow_up"
+    decision: "Follow-up in 4-8 weeks"
+    acceptable: ["4 weeks", "6 weeks", "8 weeks", "1 month", "2 months", "follow-up", "follow up"]
+    reasoning: "Reassess after medication changes"
+
+required_elements:
+  - "medication_reconciliation"
+  - "allergy"
+
+forbidden_elements:
+  - "Discontinued metformin without reason"
+
+skill_loaded: "initial_consultation"
+notes: >
+  Key clinical decisions: switch from CCB to ACEi/ARB for renoprotection,
+  add SGLT2i or GLP-1RA given cardiovascular risk and obesity.

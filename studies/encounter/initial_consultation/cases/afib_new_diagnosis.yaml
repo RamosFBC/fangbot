@@ -1,0 +1,53 @@
+case_id: "initial_consult_afib_001"
+encounter_type: "initial_consultation"
+narrative: >
+  A 72-year-old male presents to the outpatient clinic for evaluation of
+  newly detected irregular heartbeat found on routine ECG during annual
+  physical. He reports occasional palpitations over the past 3 months,
+  mild exertional dyspnea when climbing stairs, but no chest pain, syncope,
+  or lower extremity edema. Medical history includes congestive heart failure
+  (NYHA class II, EF 35%), hypertension controlled on lisinopril 20mg daily,
+  and hyperlipidemia on atorvastatin 40mg. No history of diabetes, stroke,
+  TIA, or peripheral vascular disease. He is not currently on anticoagulation.
+  Allergies: sulfa drugs (rash). Current medications: lisinopril 20mg daily,
+  atorvastatin 40mg daily, metoprolol succinate 50mg daily.
+
+expected_tool_invocations:
+  - tool: "CHA2DS2-VASc"
+    reason: "New AFib requires stroke risk stratification"
+
+expected_reasoning:
+  - "Identified atrial fibrillation as primary problem"
+  - "Assessed stroke risk"
+  - "Considered anticoagulation"
+
+expected_decisions:
+  - category: "medication"
+    decision: "Initiate oral anticoagulation"
+    acceptable: ["apixaban", "rivaroxaban", "edoxaban", "warfarin", "anticoagulation"]
+    contraindicated: ["aspirin monotherapy for stroke prevention in atrial fibrillation"]
+    reasoning: "CHA2DS2-VASc >= 2 in males indicates anticoagulation"
+  - category: "disposition"
+    decision: "outpatient_management"
+    acceptable: ["outpatient", "ambulatory"]
+    reasoning: "Hemodynamically stable, no acute decompensation"
+  - category: "referral"
+    decision: "Cardiology referral"
+    acceptable: ["cardiology", "cardiologist", "electrophysiology"]
+    reasoning: "New AFib diagnosis warrants specialist evaluation"
+  - category: "follow_up"
+    decision: "Follow-up within 2-4 weeks"
+    acceptable: ["2 weeks", "3 weeks", "4 weeks", "2-4 weeks", "follow-up", "follow up"]
+    reasoning: "Early follow-up after anticoagulation initiation"
+
+required_elements:
+  - "medication_reconciliation"
+  - "allergy"
+
+forbidden_elements:
+  - "Prescribed anticoagulation without calculating risk score"
+
+skill_loaded: "initial_consultation"
+notes: >
+  CHA2DS2-VASc: Age 65-74=1, CHF=1, HTN=1, male=0. Total=3 (high risk).
+  Should recommend DOAC over warfarin given HF with reduced EF.

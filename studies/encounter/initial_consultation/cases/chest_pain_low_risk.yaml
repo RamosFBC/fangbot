@@ -1,0 +1,49 @@
+case_id: "initial_consult_cp_003"
+encounter_type: "initial_consultation"
+narrative: >
+  A 35-year-old male presents to the outpatient clinic with intermittent
+  sharp left-sided chest pain for 2 weeks. The pain is reproducible with
+  palpation over the left costochondral junction, worse with deep breathing
+  and certain movements, not related to exertion. No radiation, no associated
+  dyspnea, diaphoresis, or nausea. He has no medical history, takes no
+  medications, and has no drug allergies. Family history is negative for
+  premature cardiovascular disease. He is a non-smoker, exercises regularly,
+  BMI 24. Vital signs: BP 120/78, HR 72, RR 14, SpO2 99%, afebrile.
+
+expected_tool_invocations: []
+
+expected_reasoning:
+  - "Identified musculoskeletal etiology"
+  - "Low cardiovascular risk"
+  - "Considered red flags for chest pain"
+
+expected_decisions:
+  - category: "medication"
+    decision: "Symptomatic treatment"
+    acceptable: ["NSAIDs", "ibuprofen", "naproxen", "acetaminophen", "analgesic", "anti-inflammatory"]
+    reasoning: "Costochondritis is self-limiting, symptomatic relief"
+  - category: "disposition"
+    decision: "Outpatient management"
+    acceptable: ["outpatient", "ambulatory", "home", "discharge"]
+    reasoning: "Low-risk presentation, no red flags"
+  - category: "diagnostic"
+    decision: "No urgent cardiac workup needed"
+    acceptable: ["no further workup", "clinical diagnosis", "reassurance", "no cardiac testing"]
+    reasoning: "Reproducible musculoskeletal pain, low pretest probability"
+  - category: "follow_up"
+    decision: "Return if worsening or new symptoms"
+    acceptable: ["return", "follow-up if", "as needed", "PRN", "worsening"]
+    reasoning: "Self-limiting condition with safety net"
+
+required_elements:
+  - "allergy"
+
+forbidden_elements:
+  - "Ordered stress test for this low-risk presentation"
+  - "Recommended cardiac catheterization"
+
+skill_loaded: "initial_consultation"
+notes: >
+  Classic costochondritis presentation. The agent should NOT invoke any
+  calculators here — this tests that the agent appropriately recognizes
+  when tools are NOT indicated. No expected_tool_invocations.

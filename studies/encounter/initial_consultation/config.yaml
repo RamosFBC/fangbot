@@ -1,0 +1,15 @@
+study_name: "Initial Consultation Encounters"
+encounter_type: "initial_consultation"
+description: >
+  Evaluate clinical reasoning quality for ambulatory initial consultations.
+  Tests the agent's ability to follow systematic clinical reasoning,
+  invoke appropriate calculators, and make correct clinical decisions.
+cases_dir: "cases"
+results_dir: "results"
+providers:
+  - claude
+models:
+  claude: "claude-sonnet-4-20250514"
+max_iterations: 15
+temperature: 0.0
+evaluation_tier: "encounter"
