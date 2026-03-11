@@ -56,7 +56,9 @@ def generate_report(
     lines.append("## Per-Case Results\n")
     for provider_key, results in results_by_provider.items():
         lines.append(f"### {provider_key}\n")
-        lines.append("| Case | Expected Score | Actual Score | Expected Tier | Actual Tier | Match | Tools Used |")
+        lines.append(
+            "| Case | Expected Score | Actual Score | Expected Tier | Actual Tier | Match | Tools Used |"
+        )
         lines.append("|---|---|---|---|---|---|---|")
         gold_map = {g.case_id: g for g in golds}
         for result in sorted(results, key=lambda r: r.case_id):

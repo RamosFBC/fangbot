@@ -289,7 +289,9 @@ class TestBatchRunner:
                 iterations=2,
             )
 
-            results = await runner.run_cases(golds, provider_name="claude", model_name="claude-sonnet-4-20250514")
+            results = await runner.run_cases(
+                golds, provider_name="claude", model_name="claude-sonnet-4-20250514"
+            )
 
         assert len(results) == 2
         assert mock_run.call_count == 2
@@ -330,7 +332,11 @@ class TestCLIRunCommand:
     def test_run_with_missing_config_file(self):
         runner = CliRunner()
         result = runner.invoke(cli_app, ["run", "/nonexistent/config.yaml"])
-        assert result.exit_code != 0 or "not found" in result.output.lower() or "error" in result.output.lower()
+        assert (
+            result.exit_code != 0
+            or "not found" in result.output.lower()
+            or "error" in result.output.lower()
+        )
 
     def test_run_with_valid_config(self, tmp_path):
         """CLI run command should load config and attempt to run study."""
@@ -365,7 +371,11 @@ class TestCLIReportCommand:
     def test_report_with_missing_dir(self):
         runner = CliRunner()
         result = runner.invoke(cli_app, ["report", "/nonexistent/dir"])
-        assert result.exit_code != 0 or "not found" in result.output.lower() or "error" in result.output.lower()
+        assert (
+            result.exit_code != 0
+            or "not found" in result.output.lower()
+            or "error" in result.output.lower()
+        )
 
     def test_report_generates_markdown(self, tmp_path):
         """CLI report command should generate a Markdown report from saved results."""

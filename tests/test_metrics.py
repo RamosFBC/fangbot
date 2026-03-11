@@ -43,7 +43,9 @@ def _make_result(
         model="claude-sonnet-4-20250514",
         actual_score=score,
         actual_risk_tier=tier,
-        actual_tool_calls=["search_clinical_calculators", "execute_clinical_calculator"] if tool_calls is None else tool_calls,
+        actual_tool_calls=["search_clinical_calculators", "execute_clinical_calculator"]
+        if tool_calls is None
+        else tool_calls,
         chain_of_thought=["Identified risk factors", "Calling calculator"] if cot is None else cot,
         guardrail_passed=guardrail_passed,
     )
@@ -157,7 +159,9 @@ class TestProtocolAdherence:
 
     def test_missing_tool_call(self):
         golds = [_make_gold("c1", 2, RiskTier.MODERATE)]
-        results = [_make_result("c1", 2, RiskTier.MODERATE, tool_calls=["search_clinical_calculators"])]
+        results = [
+            _make_result("c1", 2, RiskTier.MODERATE, tool_calls=["search_clinical_calculators"])
+        ]
         assert compute_protocol_adherence(golds, results) == 0.0
 
     def test_no_tool_calls_at_all(self):

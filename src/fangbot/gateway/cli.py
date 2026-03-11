@@ -607,7 +607,9 @@ def _default_model(provider_name: str) -> str:
 @app.command()
 def report(
     results_dir: Path = typer.Argument(..., help="Path to results directory"),
-    config: Path = typer.Option(None, "--config", "-c", help="Path to study config YAML (for gold standard cases)"),
+    config: Path = typer.Option(
+        None, "--config", "-c", help="Path to study config YAML (for gold standard cases)"
+    ),
 ) -> None:
     """Generate a comparison report from evaluation results."""
     import json
@@ -654,7 +656,9 @@ def report(
         console.print(f"[green]Report saved to:[/green] {report_path}")
         console.print(report_text)
     else:
-        console.print("[yellow]No gold standard config provided — showing raw results summary.[/yellow]")
+        console.print(
+            "[yellow]No gold standard config provided — showing raw results summary.[/yellow]"
+        )
         for provider_key, results in results_by_provider.items():
             console.print(f"\n[bold]{provider_key}[/bold]: {len(results)} cases")
             errors = sum(1 for r in results if r.error)

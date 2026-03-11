@@ -67,9 +67,7 @@ def compute_kappa(
     tiers = list(RiskTier)
 
     # Build confusion matrix
-    observed_agreement = sum(
-        1 for g, r in rated if g.expected_risk_tier == r.actual_risk_tier
-    )
+    observed_agreement = sum(1 for g, r in rated if g.expected_risk_tier == r.actual_risk_tier)
     p_o = observed_agreement / n
 
     # Expected agreement by chance

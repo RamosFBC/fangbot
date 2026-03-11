@@ -50,9 +50,7 @@ def load_cases(cases_dir: Path) -> list[GoldStandardCase]:
         try:
             case = GoldStandardCase(**data)
         except (ValidationError, TypeError) as exc:
-            raise ValueError(
-                f"Validation error in {yaml_file.name}: {exc}"
-            ) from exc
+            raise ValueError(f"Validation error in {yaml_file.name}: {exc}") from exc
 
         cases.append(case)
 
