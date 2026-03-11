@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_ITERATIONS = 10
 
+# Internal tools handled by the ReAct loop, not forwarded to MCP
+INTERNAL_TOOLS = {"load_clinical_skill"}
+
 
 @dataclass
 class ReActResult:
@@ -36,11 +39,13 @@ class ReActLoop:
         mcp_client: OpenMedicineMCPClient,
         audit_logger: AuditLogger,
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
+        clinical_skill_loader: object | None = None,
     ):
         self._provider = provider
         self._mcp = mcp_client
         self._audit = audit_logger
         self._max_iterations = max_iterations
+        self._skill_loader = clinical_skill_loader
 
     async def run(
         self,
@@ -121,20 +126,54 @@ class ReActLoop:
         session: SessionContext,
         result: ReActResult,
     ) -> None:
-        """Execute a batch of tool calls via MCP and record results."""
+        """Execute a batch of tool calls, routing internal vs. MCP tools."""
         for tc in tool_calls:
             self._audit.log_tool_call(tc.name, tc.arguments)
             session.record_tool_call(tc.name)
             result.tool_calls_made.append(tc.name)
 
-            try:
-                tool_output = await self._mcp.call_tool(tc.name, tc.arguments)
+            if tc.name in INTERNAL_TOOLS:
+                # Handle internal tool
+                tool_output = self._handle_internal_tool(tc)
                 self._audit.log_tool_result(tc.name, tool_output)
                 session.add_tool_result(tc.id, tool_output)
-            except MCPToolError as e:
-                error_msg = str(e)
-                self._audit.log_tool_error(tc.name, error_msg)
-                session.add_tool_result(tc.id, f"ERROR: {error_msg}")
+            else:
+                # Forward to MCP
+                try:
+                    tool_output = await self._mcp.call_tool(tc.name, tc.arguments)
+                    self._audit.log_tool_result(tc.name, tool_output)
+                    session.add_tool_result(tc.id, tool_output)
+                except MCPToolError as e:
+                    error_msg = str(e)
+                    self._audit.log_tool_error(tc.name, error_msg)
+                    session.add_tool_result(tc.id, f"ERROR: {error_msg}")
+
+    def _handle_internal_tool(self, tc: ToolCall) -> str:
+        """Handle an internal tool call (not forwarded to MCP)."""
+        if tc.name == "load_clinical_skill":
+            return self._handle_load_clinical_skill(tc.arguments)
+        return f"ERROR: Unknown internal tool: {tc.name}"
+
+    def _handle_load_clinical_skill(self, arguments: dict) -> str:
+        """Load a clinical skill and return its content."""
+        if self._skill_loader is None:
+            return "ERROR: Clinical skill loader not configured."
+
+        skill_name = arguments.get("skill_name", "")
+        reason = arguments.get("reason", "")
+
+        try:
+            content = self._skill_loader.load_skill(skill_name)
+            self._audit.log(
+                EventType.SKILL_LOADED,
+                {"skill_name": skill_name, "reason": reason},
+            )
+            logger.info(f"Loaded clinical skill: {skill_name} (reason: {reason})")
+            return content
+        except Exception as e:
+            error_msg = f"Failed to load skill '{skill_name}': {e}"
+            logger.warning(error_msg)
+            return f"ERROR: {error_msg}"
 
     async def _try_corrective(
         self,
