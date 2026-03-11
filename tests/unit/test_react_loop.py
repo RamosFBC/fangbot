@@ -9,7 +9,7 @@ from fangbot.memory.audit import AuditLogger, EventType
 from fangbot.memory.session import SessionContext
 from fangbot.models import ProviderResponse, ToolCall
 
-from .conftest import MockMCPClient, MockProvider
+from tests.conftest import MockMCPClient, MockProvider
 
 
 @pytest.fixture
