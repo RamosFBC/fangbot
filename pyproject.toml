@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fangbot"
-version = "0.2.0"
+version = "0.2.1"
 description = "Clinical reasoning agent powered by OpenMedicine — fangs of the healing serpent"
 readme = "README.md"
 license = "MIT"
@@ -28,6 +28,7 @@ dependencies = [
     "anthropic>=0.40.0",
     "mcp>=1.0.0",
     "open-medicine>=0.6.0",
+    "openai>=1.0.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
@@ -43,9 +44,7 @@ Issues = "https://github.com/RamosFBC/fangbot/issues"
 Changelog = "https://github.com/RamosFBC/fangbot/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-openai = ["openai>=1.0.0"]
 gemini = ["google-genai>=1.0.0"]
-local = ["openai>=1.0.0"]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
