@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from fangbot.evaluation.metrics import (
     compute_accuracy,
     compute_cot_quality,

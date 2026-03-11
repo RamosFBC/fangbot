@@ -29,18 +29,18 @@ class TestCLI:
         assert result.exit_code == 0
         assert "interactive" in result.output.lower()
 
-    def test_run_stub(self, tmp_path):
+    def test_run_with_invalid_config(self, tmp_path):
         config_file = tmp_path / "config.yaml"
         config_file.write_text("study: test")
 
         result = runner.invoke(app, ["run", str(config_file)])
-        assert result.exit_code == 0
-        assert "not yet implemented" in result.output.lower()
+        # Real implementation now validates config — invalid config returns error
+        assert result.exit_code == 1
 
-    def test_report_stub(self, tmp_path):
+    def test_report_with_empty_dir(self, tmp_path):
         result = runner.invoke(app, ["report", str(tmp_path)])
-        assert result.exit_code == 0
-        assert "not yet implemented" in result.output.lower()
+        # Real implementation now checks for JSON files — empty dir returns error
+        assert result.exit_code == 1
 
 
 class TestProviderFactory:

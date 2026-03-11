@@ -2,19 +2,51 @@
 
 from __future__ import annotations
 
+import json as json_mod
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import yaml
 from pydantic import ValidationError
+from typer.testing import CliRunner
 
 from fangbot.evaluation.batch_runner import BatchRunner
+from fangbot.evaluation.gold_standard import load_cases, load_study_config
 from fangbot.evaluation.models import (
+    CaseResult,
     ExpectedToolCall,
     GoldStandardCase,
     RiskTier,
     StudyConfig,
 )
+from fangbot.evaluation.report import generate_report
+from fangbot.gateway.cli import app as cli_app
+
+
+def _make_gold(case_id, score, tier):
+    return GoldStandardCase(
+        case_id=case_id,
+        narrative=f"Patient {case_id}.",
+        expected_score=score,
+        expected_risk_tier=tier,
+        expected_tool_calls=[ExpectedToolCall(tool_name="execute_clinical_calculator")],
+    )
+
+
+def _make_result(case_id, score, tier, tool_calls=None):
+    return CaseResult(
+        case_id=case_id,
+        provider="claude",
+        model="claude-sonnet-4-20250514",
+        actual_score=score,
+        actual_risk_tier=tier,
+        actual_tool_calls=tool_calls
+        if tool_calls is not None
+        else ["search_clinical_calculators", "execute_clinical_calculator"],
+        chain_of_thought=["Step 1"],
+        guardrail_passed=True,
+    )
 
 
 class TestGoldStandardCase:
@@ -91,11 +123,6 @@ class TestRiskTier:
         assert RiskTier.LOW.value == "low"
         assert RiskTier.MODERATE.value == "moderate"
         assert RiskTier.HIGH.value == "high"
-
-
-import yaml
-
-from fangbot.evaluation.gold_standard import load_cases, load_study_config
 
 
 class TestLoadStudyConfig:
@@ -184,35 +211,6 @@ class TestLoadCases:
 
         with pytest.raises(ValueError, match="bad_case.yaml"):
             load_cases(cases_dir)
-
-
-from fangbot.evaluation.models import CaseResult
-from fangbot.evaluation.report import generate_report
-
-
-def _make_gold(case_id, score, tier):
-    return GoldStandardCase(
-        case_id=case_id,
-        narrative=f"Patient {case_id}.",
-        expected_score=score,
-        expected_risk_tier=tier,
-        expected_tool_calls=[ExpectedToolCall(tool_name="execute_clinical_calculator")],
-    )
-
-
-def _make_result(case_id, score, tier, tool_calls=None):
-    return CaseResult(
-        case_id=case_id,
-        provider="claude",
-        model="claude-sonnet-4-20250514",
-        actual_score=score,
-        actual_risk_tier=tier,
-        actual_tool_calls=tool_calls
-        if tool_calls is not None
-        else ["search_clinical_calculators", "execute_clinical_calculator"],
-        chain_of_thought=["Step 1"],
-        guardrail_passed=True,
-    )
 
 
 class TestReportGenerator:
@@ -328,12 +326,6 @@ class TestBatchRunner:
         assert len(json_files) == 1
 
 
-import json as json_mod
-
-from typer.testing import CliRunner
-from fangbot.gateway.cli import app as cli_app
-
-
 class TestCLIRunCommand:
     def test_run_with_missing_config_file(self):
         runner = CliRunner()
@@ -342,8 +334,6 @@ class TestCLIRunCommand:
 
     def test_run_with_valid_config(self, tmp_path):
         """CLI run command should load config and attempt to run study."""
-        import yaml
-
         cases_dir = tmp_path / "cases"
         cases_dir.mkdir()
         case_data = {
