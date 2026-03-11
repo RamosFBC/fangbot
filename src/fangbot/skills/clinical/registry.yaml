@@ -1,0 +1,29 @@
+skills:
+  - name: initial_consultation
+    description: "First ambulatory visit — full HPI, PMH, exam, assessment/plan"
+    encounter_types:
+      - "new_patient"
+      - "first_visit"
+      - "initial_evaluation"
+
+  - name: follow_up
+    description: "Return ambulatory visit — interval history, focused exam, plan review"
+    encounter_types:
+      - "follow_up"
+      - "return_visit"
+      - "recheck"
+
+  - name: preoperative_evaluation
+    description: "Surgical clearance — risk stratification, medication holds"
+    encounter_types:
+      - "preop"
+      - "surgical_clearance"
+      - "pre_surgical"
+
+  - name: preventive_checkup
+    description: "Annual preventive visit — screening, immunizations, chronic disease management"
+    encounter_types:
+      - "annual_exam"
+      - "wellness_visit"
+      - "screening"
+      - "checkup"
