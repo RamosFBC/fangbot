@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fangbot"
-version = "0.2.1"
+version = "0.3.0"
 description = "Clinical reasoning agent powered by OpenMedicine — fangs of the healing serpent"
 readme = "README.md"
 license = "MIT"

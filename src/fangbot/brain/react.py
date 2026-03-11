@@ -226,9 +226,7 @@ class ReActLoop:
             session.add_assistant_message(
                 corrective_response.content, tool_calls=corrective_response.tool_calls
             )
-            await self._execute_tool_calls(
-                corrective_response.tool_calls, session, result, _cb
-            )
+            await self._execute_tool_calls(corrective_response.tool_calls, session, result, _cb)
 
             # Continue the loop for remaining iterations
             for _ in range(self._max_iterations - result.iterations):
