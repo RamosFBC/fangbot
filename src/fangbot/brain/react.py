@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass, field
 
 from fangbot.brain.guardrails import GuardrailResult, run_all_guardrails
+from fangbot.brain.progress import NullProgress, ProgressCallback
 from fangbot.brain.providers.base import LLMProvider
 from fangbot.memory.audit import AuditLogger, EventType
 from fangbot.memory.session import SessionContext
@@ -52,8 +53,10 @@ class ReActLoop:
         user_input: str,
         session: SessionContext,
         tools: list[ToolDefinition],
+        progress: ProgressCallback | None = None,
     ) -> ReActResult:
         """Execute the ReAct loop for a single user query."""
+        cb = progress or NullProgress()
         result = ReActResult(synthesis="")
 
         self._audit.log(EventType.CASE_RECEIVED, {"input": user_input})
@@ -61,6 +64,7 @@ class ReActLoop:
 
         for iteration in range(1, self._max_iterations + 1):
             result.iterations = iteration
+            cb.on_iteration(iteration, self._max_iterations)
             logger.debug(f"ReAct iteration {iteration}")
 
             try:
@@ -82,6 +86,7 @@ class ReActLoop:
             if response.content:
                 result.chain_of_thought.append(response.content)
                 self._audit.log_think(response.content)
+                cb.on_thinking(response.content)
 
             # If no tool calls, this is the final response
             if not response.tool_calls:
@@ -90,9 +95,9 @@ class ReActLoop:
                 # Run guardrails
                 guardrail = run_all_guardrails(result.tool_calls_made)
                 if not guardrail.passed and guardrail.corrective_message:
-                    # Give the LLM one corrective chance
+                    cb.on_guardrail_correction(guardrail.violations)
                     corrective_result = await self._try_corrective(
-                        session, tools, guardrail, result
+                        session, tools, guardrail, result, cb
                     )
                     if corrective_result is not None:
                         return corrective_result
@@ -109,7 +114,7 @@ class ReActLoop:
 
             # Execute tool calls
             session.add_assistant_message(response.content, tool_calls=response.tool_calls)
-            await self._execute_tool_calls(response.tool_calls, session, result)
+            await self._execute_tool_calls(response.tool_calls, session, result, cb)
 
         # Max iterations reached
         result.synthesis = (
@@ -125,28 +130,34 @@ class ReActLoop:
         tool_calls: list[ToolCall],
         session: SessionContext,
         result: ReActResult,
+        cb: ProgressCallback | None = None,
     ) -> None:
         """Execute a batch of tool calls, routing internal vs. MCP tools."""
+        _cb = cb or NullProgress()
         for tc in tool_calls:
             self._audit.log_tool_call(tc.name, tc.arguments)
             session.record_tool_call(tc.name)
             result.tool_calls_made.append(tc.name)
+            _cb.on_tool_start(tc.name, tc.arguments)
 
             if tc.name in INTERNAL_TOOLS:
                 # Handle internal tool
                 tool_output = self._handle_internal_tool(tc)
                 self._audit.log_tool_result(tc.name, tool_output)
                 session.add_tool_result(tc.id, tool_output)
+                _cb.on_tool_result(tc.name, tool_output)
             else:
                 # Forward to MCP
                 try:
                     tool_output = await self._mcp.call_tool(tc.name, tc.arguments)
                     self._audit.log_tool_result(tc.name, tool_output)
                     session.add_tool_result(tc.id, tool_output)
+                    _cb.on_tool_result(tc.name, tool_output)
                 except MCPToolError as e:
                     error_msg = str(e)
                     self._audit.log_tool_error(tc.name, error_msg)
                     session.add_tool_result(tc.id, f"ERROR: {error_msg}")
+                    _cb.on_tool_result(tc.name, error_msg, is_error=True)
 
     def _handle_internal_tool(self, tc: ToolCall) -> str:
         """Handle an internal tool call (not forwarded to MCP)."""
@@ -181,8 +192,10 @@ class ReActLoop:
         tools: list[ToolDefinition],
         guardrail: GuardrailResult,
         result: ReActResult,
+        cb: ProgressCallback | None = None,
     ) -> ReActResult | None:
         """Inject a corrective message and re-run if guardrails failed."""
+        _cb = cb or NullProgress()
         logger.warning(f"Guardrail violations: {guardrail.violations}. Attempting correction.")
 
         # Add the LLM's response, then inject corrective user message
@@ -213,11 +226,14 @@ class ReActLoop:
             session.add_assistant_message(
                 corrective_response.content, tool_calls=corrective_response.tool_calls
             )
-            await self._execute_tool_calls(corrective_response.tool_calls, session, result)
+            await self._execute_tool_calls(
+                corrective_response.tool_calls, session, result, _cb
+            )
 
             # Continue the loop for remaining iterations
             for _ in range(self._max_iterations - result.iterations):
                 result.iterations += 1
+                _cb.on_iteration(result.iterations, self._max_iterations)
                 try:
                     response = await self._provider.call(
                         messages=session.messages,
@@ -229,6 +245,7 @@ class ReActLoop:
                 if response.content:
                     result.chain_of_thought.append(response.content)
                     self._audit.log_think(response.content)
+                    _cb.on_thinking(response.content)
 
                 if not response.tool_calls:
                     result.synthesis = response.content
@@ -240,7 +257,7 @@ class ReActLoop:
                     return result
 
                 session.add_assistant_message(response.content, tool_calls=response.tool_calls)
-                await self._execute_tool_calls(response.tool_calls, session, result)
+                await self._execute_tool_calls(response.tool_calls, session, result, _cb)
 
         # Corrective attempt also failed — return None to use original result
         return None

@@ -28,10 +28,48 @@ console = Console()
 
 
 def _setup_logging(level: str) -> None:
+    """Configure logging with noise suppression for third-party libraries.
+
+    Uses force=True to override any logging configuration that was already
+    set up by imported libraries (httpx, openai, anthropic SDKs all call
+    basicConfig or add handlers on import).
+    """
+    resolved_level = getattr(logging, level.upper(), logging.INFO)
+
+    # Force reconfigure — basicConfig without force is a no-op if root
+    # logger already has handlers (which httpx/openai set up on import)
     logging.basicConfig(
-        level=getattr(logging, level.upper(), logging.INFO),
+        level=resolved_level,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
+        force=True,
     )
+
+    # Only show fangbot logs at the configured level; everything else WARNING+
+    logging.getLogger("fangbot").setLevel(resolved_level)
+
+    # Silence noisy third-party loggers that produce HTTP request/response spam.
+    # These must be set AFTER basicConfig(force=True) which resets handlers.
+    _noisy_loggers = (
+        "httpx",
+        "httpcore",
+        "httpcore.http11",
+        "httpcore.connection",
+        "openai",
+        "openai._base_client",
+        "anthropic",
+        "anthropic._base_client",
+        "urllib3",
+        "urllib3.connectionpool",
+        "mcp",
+        "mcp.client",
+        "mcp.server",
+        "asyncio",
+        "google",
+        "google.auth",
+        "google.api_core",
+    )
+    for name in _noisy_loggers:
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 # ---------------------------------------------------------------------------
@@ -427,6 +465,7 @@ async def _chat_async() -> None:
     """Async implementation of the interactive chat session."""
     from fangbot.brain.react import ReActLoop
     from fangbot.brain.system_prompt import build_system_prompt
+    from fangbot.gateway.renderer import ChatRenderer
     from fangbot.memory.audit import AuditLogger
     from fangbot.memory.session import SessionContext
     from fangbot.skills.clinical_loader import ClinicalSkillLoader
@@ -451,19 +490,22 @@ async def _chat_async() -> None:
     system_prompt = build_system_prompt(available_skills=available_skills)
     session = SessionContext(system_prompt=system_prompt)
 
-    if available_skills:
-        console.print(
-            f"[dim]Clinical skills: {', '.join(s['name'] for s in available_skills)}[/dim]"
-        )
+    # Create the renderer
+    renderer = ChatRenderer(console, model_name=provider.model_name)
 
+    # Welcome panel
+    skill_names = ", ".join(s["name"] for s in available_skills) if available_skills else "none"
     console.print(
         Panel(
-            f"[bold]Fangbot[/bold]\n"
-            f"Provider: {provider.model_name} | Session: {session_id}\n"
-            f"Type [bold cyan]/help[/bold cyan] for commands, [bold cyan]/model[/bold cyan] to switch models, "
-            f"[bold cyan]quit[/bold cyan] to exit.",
-            title="Fangbot",
+            f"[bold]Provider:[/bold] {provider.model_name}\n"
+            f"[bold]Session:[/bold]  {session_id}\n"
+            f"[bold]Skills:[/bold]   {skill_names}\n\n"
+            f"[dim]Type [bold cyan]/help[/bold cyan] for commands, "
+            f"[bold cyan]/model[/bold cyan] to switch, "
+            f"[bold cyan]quit[/bold cyan] to exit.[/dim]",
+            title="[bold]Fangbot[/bold]",
             border_style="blue",
+            padding=(0, 1),
         )
     )
 
@@ -480,7 +522,9 @@ async def _chat_async() -> None:
         skill_tool_def = skill_loader.get_tool_definition()
         all_tools = [skill_tool_def] + tools
 
-        console.print(f"[dim]Discovered {len(tools)} MCP tools: {[t.name for t in tools]}[/dim]\n")
+        console.print(
+            f"[dim]  Connected to OpenMedicine · {len(tools)} tools available[/dim]\n"
+        )
 
         react = ReActLoop(
             provider=provider,
@@ -521,33 +565,30 @@ async def _chat_async() -> None:
                 await _handle_slash_command(stripped, state)
                 continue
 
-            # Regular message — run through ReAct loop
+            # Regular message — run through ReAct loop with live rendering
+            renderer._model_name = state.provider.model_name
+            renderer.start()
+
             try:
-                with console.status(
-                    f"[bold cyan]{state.provider.model_name} thinking...[/bold cyan]"
-                ):
-                    result = await state.react.run(stripped, state.session, state.tools)
+                result = await state.react.run(
+                    stripped, state.session, state.tools, progress=renderer
+                )
             except Exception as e:
-                console.print(f"\n[red]Error: {e}[/red]")
+                renderer.render_error(str(e))
                 console.print(
-                    "[dim]The session is still active. Try /model to switch models or /clear to reset.[/dim]\n"
+                    "[dim]  The session is still active. "
+                    "Try /model to switch models or /clear to reset.[/dim]\n"
                 )
                 continue
 
             if not result.guardrail_passed:
-                console.print(
-                    Panel(
-                        "\n".join(result.guardrail_violations),
-                        title="Guardrail Warnings",
-                        border_style="yellow",
-                    )
-                )
+                renderer.render_guardrail_warnings(result.guardrail_violations)
 
-            console.print(f"\n{result.synthesis}\n")
-            console.print(
-                f"[dim]{state.provider.model_name} · "
-                f"tools: {', '.join(result.tool_calls_made) or 'none'} · "
-                f"iterations: {result.iterations}[/dim]\n"
+            renderer.render_synthesis(result.synthesis)
+            renderer.render_footer(
+                state.provider.model_name,
+                result.tool_calls_made,
+                result.iterations,
             )
 
     console.print(f"\n[dim]Audit log saved to: {audit.file_path}[/dim]")
