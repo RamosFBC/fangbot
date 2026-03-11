@@ -78,6 +78,7 @@ class ChatState:
     audit: object  # AuditLogger
     tools: list
     mcp: object  # OpenMedicineMCPClient
+    skill_loader: object | None = None  # ClinicalSkillLoader
 
     def _rebuild_react(self) -> None:
         from fangbot.brain.react import ReActLoop
@@ -87,6 +88,7 @@ class ChatState:
             mcp_client=self.mcp,
             audit_logger=self.audit,
             max_iterations=self.settings.max_iterations,
+            clinical_skill_loader=self.skill_loader,
         )
 
 
@@ -424,9 +426,10 @@ async def _handle_slash_command(user_input: str, state: ChatState) -> bool:
 async def _chat_async() -> None:
     """Async implementation of the interactive chat session."""
     from fangbot.brain.react import ReActLoop
-    from fangbot.brain.system_prompt import CLINICAL_SYSTEM_PROMPT
+    from fangbot.brain.system_prompt import build_system_prompt
     from fangbot.memory.audit import AuditLogger
     from fangbot.memory.session import SessionContext
+    from fangbot.skills.clinical_loader import ClinicalSkillLoader
     from fangbot.skills.mcp_client import OpenMedicineMCPClient
     from fangbot.skills.tool_registry import ToolRegistry
 
@@ -441,7 +444,17 @@ async def _chat_async() -> None:
 
     audit = AuditLogger(log_dir=settings.log_dir)
     session_id = audit.start_session()
-    session = SessionContext(system_prompt=CLINICAL_SYSTEM_PROMPT)
+
+    # Load clinical skills
+    skill_loader = ClinicalSkillLoader()
+    available_skills = skill_loader.list_skills()
+    system_prompt = build_system_prompt(available_skills=available_skills)
+    session = SessionContext(system_prompt=system_prompt)
+
+    if available_skills:
+        console.print(
+            f"[dim]Clinical skills: {', '.join(s['name'] for s in available_skills)}[/dim]"
+        )
 
     console.print(
         Panel(
@@ -462,13 +475,21 @@ async def _chat_async() -> None:
     async with mcp.connect():
         registry = ToolRegistry(mcp)
         tools = await registry.get_tools()
-        console.print(f"[dim]Discovered {len(tools)} MCP tools: {[t.name for t in tools]}[/dim]\n")
+
+        # Add clinical skill tool to MCP tools
+        skill_tool_def = skill_loader.get_tool_definition()
+        all_tools = [skill_tool_def] + tools
+
+        console.print(
+            f"[dim]Discovered {len(tools)} MCP tools: {[t.name for t in tools]}[/dim]\n"
+        )
 
         react = ReActLoop(
             provider=provider,
             mcp_client=mcp,
             audit_logger=audit,
             max_iterations=settings.max_iterations,
+            clinical_skill_loader=skill_loader,
         )
 
         state = ChatState(
@@ -478,8 +499,9 @@ async def _chat_async() -> None:
             react=react,
             session=session,
             audit=audit,
-            tools=tools,
+            tools=all_tools,
             mcp=mcp,
+            skill_loader=skill_loader,
         )
 
         while True:
