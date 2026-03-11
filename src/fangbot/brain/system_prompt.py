@@ -34,3 +34,38 @@ Structure your response as:
 3. **Tool Results:** Direct output from the MCP tool (with DOI)
 4. **Interpretation:** Clinical significance of the result
 """
+
+_SKILL_AWARENESS_SECTION = """
+## CLINICAL REASONING SKILLS
+
+You have access to encounter-based clinical reasoning frameworks via the `load_clinical_skill` tool.
+At the start of any clinical encounter, identify the encounter type and load the appropriate skill.
+The skill will provide you with a systematic clinical reasoning framework, decision triggers, and safety invariants.
+
+**Available skills:**
+{skill_list}
+
+**When to load a skill:**
+- When a patient case or clinical scenario is presented
+- When the user describes a clinical encounter (new patient, follow-up, preop, screening)
+- Load the skill BEFORE beginning your clinical reasoning
+
+**After loading a skill:**
+- Follow the clinical reasoning framework it provides
+- Use the hardcoded decision triggers when relevant conditions are identified
+- Ensure all safety invariants are addressed
+- Use dynamic discovery (search tools) for conditions not covered by hardcoded triggers
+"""
+
+
+def build_system_prompt(available_skills: list[dict[str, str]] | None = None) -> str:
+    """Build the full system prompt, optionally including skill awareness."""
+    prompt = CLINICAL_SYSTEM_PROMPT
+
+    if available_skills:
+        skill_lines = "\n".join(
+            f"- **{s['name']}**: {s['description']}" for s in available_skills
+        )
+        prompt += _SKILL_AWARENESS_SECTION.format(skill_list=skill_lines)
+
+    return prompt
