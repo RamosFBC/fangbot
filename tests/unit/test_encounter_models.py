@@ -27,7 +27,14 @@ class TestExpectedDecision:
         assert len(d.acceptable) == 2
 
     def test_category_values(self) -> None:
-        for cat in ["medication", "disposition", "referral", "follow_up", "diagnostic", "procedure"]:
+        for cat in [
+            "medication",
+            "disposition",
+            "referral",
+            "follow_up",
+            "diagnostic",
+            "procedure",
+        ]:
             d = ExpectedDecision(category=cat, decision="test")
             assert d.category == cat
 

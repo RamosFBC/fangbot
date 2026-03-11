@@ -480,9 +480,7 @@ async def _chat_async() -> None:
         skill_tool_def = skill_loader.get_tool_definition()
         all_tools = [skill_tool_def] + tools
 
-        console.print(
-            f"[dim]Discovered {len(tools)} MCP tools: {[t.name for t in tools]}[/dim]\n"
-        )
+        console.print(f"[dim]Discovered {len(tools)} MCP tools: {[t.name for t in tools]}[/dim]\n")
 
         react = ReActLoop(
             provider=provider,

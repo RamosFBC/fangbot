@@ -51,10 +51,7 @@ class ClinicalSkillLoader:
 
     def list_skills(self) -> list[dict[str, str]]:
         """Return a list of available skills with name and description."""
-        return [
-            {"name": entry.name, "description": entry.description}
-            for entry in self.registry
-        ]
+        return [{"name": entry.name, "description": entry.description} for entry in self.registry]
 
     def load_skill(self, skill_name: str) -> str:
         """Load the content of a clinical skill by name."""

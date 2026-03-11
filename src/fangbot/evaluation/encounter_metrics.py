@@ -156,8 +156,7 @@ def compute_forbidden_elements_absence(
     clean_count = 0
     for gold, result in pairs:
         has_forbidden = any(
-            _text_contains(result.synthesis, forbidden)
-            for forbidden in gold.forbidden_elements
+            _text_contains(result.synthesis, forbidden) for forbidden in gold.forbidden_elements
         )
         if not has_forbidden:
             clean_count += 1

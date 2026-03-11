@@ -66,9 +66,7 @@ class TestDecisionAccuracy:
                 )
             ]
         )
-        result = _make_result(
-            synthesis="I recommend starting apixaban for stroke prevention."
-        )
+        result = _make_result(synthesis="I recommend starting apixaban for stroke prevention.")
         score = compute_decision_accuracy([gold], [result])
         assert score > 0.0
 
@@ -115,9 +113,7 @@ class TestDecisionSafety:
                 )
             ]
         )
-        result = _make_result(
-            synthesis="I recommend aspirin monotherapy for stroke prevention."
-        )
+        result = _make_result(synthesis="I recommend aspirin monotherapy for stroke prevention.")
         score = compute_decision_safety([gold], [result])
         assert score < 1.0
 
@@ -130,9 +126,7 @@ class TestDecisionCompleteness:
                 ExpectedDecision(category="referral", decision="Cardiology referral"),
             ]
         )
-        result = _make_result(
-            synthesis="Starting anticoagulation. Cardiology referral placed."
-        )
+        result = _make_result(synthesis="Starting anticoagulation. Cardiology referral placed.")
         score = compute_decision_completeness([gold], [result])
         assert score == 1.0
 
@@ -183,9 +177,7 @@ class TestForbiddenElements:
 
     def test_forbidden_present(self) -> None:
         gold = _make_gold(forbidden=["Prescribed without risk score"])
-        result = _make_result(
-            synthesis="Prescribed without risk score calculation."
-        )
+        result = _make_result(synthesis="Prescribed without risk score calculation.")
         score = compute_forbidden_elements_absence([gold], [result])
         assert score < 1.0
 

@@ -63,9 +63,7 @@ def build_system_prompt(available_skills: list[dict[str, str]] | None = None) ->
     prompt = CLINICAL_SYSTEM_PROMPT
 
     if available_skills:
-        skill_lines = "\n".join(
-            f"- **{s['name']}**: {s['description']}" for s in available_skills
-        )
+        skill_lines = "\n".join(f"- **{s['name']}**: {s['description']}" for s in available_skills)
         prompt += _SKILL_AWARENESS_SECTION.format(skill_list=skill_lines)
 
     return prompt

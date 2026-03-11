@@ -45,9 +45,7 @@ def skills_dir(tmp_path: Path) -> Path:
 
 class TestToolRouting:
     @pytest.mark.asyncio
-    async def test_internal_tool_handled_locally(
-        self, audit_logger, session, skills_dir
-    ):
+    async def test_internal_tool_handled_locally(self, audit_logger, session, skills_dir):
         """load_clinical_skill should be intercepted, not sent to MCP."""
         provider = MockProvider(
             responses=[
@@ -121,9 +119,7 @@ class TestToolRouting:
         assert "load_clinical_skill" in result.tool_calls_made
 
     @pytest.mark.asyncio
-    async def test_skill_load_returns_content_to_agent(
-        self, audit_logger, session, skills_dir
-    ):
+    async def test_skill_load_returns_content_to_agent(self, audit_logger, session, skills_dir):
         """The skill content should be returned as a tool result."""
         provider = MockProvider(
             responses=[
@@ -159,16 +155,14 @@ class TestToolRouting:
         )
 
         tools = [loader.get_tool_definition()]
-        result = await loop.run("Test skill loading", session, tools)
+        await loop.run("Test skill loading", session, tools)
 
         # Check that the skill content ended up in the session messages
         tool_messages = [m for m in session.messages if m.role.value == "tool"]
         assert any("Initial Consultation" in m.content for m in tool_messages)
 
     @pytest.mark.asyncio
-    async def test_invalid_skill_returns_error(
-        self, audit_logger, session, skills_dir
-    ):
+    async def test_invalid_skill_returns_error(self, audit_logger, session, skills_dir):
         """Loading a non-existent skill should return an error, not crash."""
         provider = MockProvider(
             responses=[
