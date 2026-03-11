@@ -43,8 +43,8 @@ fangbot chat
 ```bash
 fangbot init                          # First-time setup wizard
 fangbot chat                          # Interactive clinical reasoning session
-fangbot run studies/config.yaml       # Batch evaluation (Phase 2)
-fangbot report studies/results/       # Generate comparison report (Phase 2)
+fangbot run studies/chadsvasc/config.yaml   # Batch evaluation against gold standard cases
+fangbot report studies/chadsvasc/results/   # Generate cross-provider comparison report
 ```
 
 ### Chat commands
@@ -96,12 +96,37 @@ Environment variables (prefix `FANGBOT_`):
 
 ```
 Gateway (CLI) → Brain (ReAct loop) → Skills (MCP tools) → Memory (audit trail)
+                                                        → Evaluation (batch runner, metrics, reports)
 ```
 
 - **Gateway** — CLI interface with typer + rich
 - **Brain** — ReAct loop engine, LLM providers, clinical guardrails
 - **Skills** — MCP client connecting to OpenMedicine server via stdio
 - **Memory** — Session context, JSONL audit logger
+- **Evaluation** — Batch runner, gold standard comparison, metrics engine, Markdown report generator
+
+## Evaluation
+
+Fangbot includes a batch evaluation framework for benchmarking LLM providers against gold standard clinical cases.
+
+```bash
+# Run all CHA2DS2-VASc cases through the agent
+fangbot run studies/chadsvasc/config.yaml
+
+# Generate a comparison report from saved results
+fangbot report studies/chadsvasc/results/ --config studies/chadsvasc/config.yaml
+```
+
+Gold standard cases are YAML files with expected scores, risk tiers, and tool calls. The evaluation engine computes:
+
+| Metric | Description |
+|--------|-------------|
+| Accuracy | Exact score match rate |
+| MAE | Mean absolute error |
+| Cohen's Kappa | Inter-rater reliability |
+| Sensitivity/Specificity | Per risk tier (low/moderate/high) |
+| Protocol adherence | Did the agent call the required MCP tools? |
+| CoT quality | Was reasoning auditable with chain-of-thought? |
 
 ## Development
 
