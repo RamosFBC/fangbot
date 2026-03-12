@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_ITERATIONS = 10
 
 # Internal tools handled by the ReAct loop, not forwarded to MCP
-INTERNAL_TOOLS = {"load_clinical_skill"}
+INTERNAL_TOOLS = {"load_clinical_skill", "parse_patient_chart"}
 
 
 @dataclass
@@ -41,12 +41,14 @@ class ReActLoop:
         audit_logger: AuditLogger,
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
         clinical_skill_loader: object | None = None,
+        chart_parser: object | None = None,
     ):
         self._provider = provider
         self._mcp = mcp_client
         self._audit = audit_logger
         self._max_iterations = max_iterations
         self._skill_loader = clinical_skill_loader
+        self._chart_parser = chart_parser
 
     async def run(
         self,
@@ -142,7 +144,7 @@ class ReActLoop:
 
             if tc.name in INTERNAL_TOOLS:
                 # Handle internal tool
-                tool_output = self._handle_internal_tool(tc)
+                tool_output = await self._handle_internal_tool(tc)
                 self._audit.log_tool_result(tc.name, tool_output)
                 session.add_tool_result(tc.id, tool_output)
                 _cb.on_tool_result(tc.name, tool_output)
@@ -159,10 +161,12 @@ class ReActLoop:
                     session.add_tool_result(tc.id, f"ERROR: {error_msg}")
                     _cb.on_tool_result(tc.name, error_msg, is_error=True)
 
-    def _handle_internal_tool(self, tc: ToolCall) -> str:
+    async def _handle_internal_tool(self, tc: ToolCall) -> str:
         """Handle an internal tool call (not forwarded to MCP)."""
         if tc.name == "load_clinical_skill":
             return self._handle_load_clinical_skill(tc.arguments)
+        if tc.name == "parse_patient_chart":
+            return await self._handle_parse_patient_chart(tc.arguments)
         return f"ERROR: Unknown internal tool: {tc.name}"
 
     def _handle_load_clinical_skill(self, arguments: dict) -> str:
@@ -184,6 +188,34 @@ class ReActLoop:
         except Exception as e:
             error_msg = f"Failed to load skill '{skill_name}': {e}"
             logger.warning(error_msg)
+            return f"ERROR: {error_msg}"
+
+    async def _handle_parse_patient_chart(self, arguments: dict) -> str:
+        """Parse clinical text into structured chart data."""
+        if self._chart_parser is None:
+            return "ERROR: Chart parser not configured."
+
+        clinical_text = arguments.get("clinical_text", "")
+        if not clinical_text:
+            return "ERROR: clinical_text is required."
+
+        try:
+            chart = await self._chart_parser.parse(clinical_text)
+            self._audit.log(
+                EventType.CHART_PARSE,
+                {
+                    "facts_count": len(chart.facts),
+                    "warnings_count": len(chart.parse_warnings),
+                    "categories": list({f.category.value for f in chart.facts}),
+                },
+            )
+            logger.info(
+                f"Chart parsed: {len(chart.facts)} facts, {len(chart.parse_warnings)} warnings"
+            )
+            return chart.model_dump_json(indent=2)
+        except Exception as e:
+            error_msg = f"Chart parsing failed: {e}"
+            logger.error(error_msg)
             return f"ERROR: {error_msg}"
 
     async def _try_corrective(

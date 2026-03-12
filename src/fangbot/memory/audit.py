@@ -23,6 +23,7 @@ class EventType(str, Enum):
     TOOL_ERROR = "tool_error"
     GUARDRAIL_VIOLATION = "guardrail_violation"
     SKILL_LOADED = "skill_loaded"
+    CHART_PARSE = "chart_parse"
     SYNTHESIS = "synthesis"
 
 
