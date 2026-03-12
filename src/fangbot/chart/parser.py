@@ -59,8 +59,6 @@ class ChartParser:
 
         for i, raw_fact in enumerate(extraction.get("facts", [])):
             try:
-                # Set defaults for optional fields
-                raw_fact.setdefault("confidence", 1.0)
                 fact = ChartFact(**raw_fact)
                 facts.append(fact)
             except Exception as e:

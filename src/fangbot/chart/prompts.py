@@ -1,5 +1,7 @@
 """Extraction prompt and tool schema for LLM-assisted chart parsing."""
 
+from __future__ import annotations
+
 EXTRACTION_SYSTEM_PROMPT = """You are a clinical data extraction engine. Your ONLY job is to parse clinical text and extract ALL discrete clinical facts into structured data.
 
 ## Instructions
