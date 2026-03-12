@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-11
+
+### Added
+
+- Chart grounding and provenance system — structured extraction from clinical text with source tracking
+- `ChartFact` and `PatientChart` Pydantic models for provenance-tracked clinical facts (labs, vitals, medications, diagnoses, procedures, allergies, imaging, cultures)
+- LLM-assisted chart parser using tool_use for reliable structured extraction across all providers
+- `parse_patient_chart` internal tool in the ReAct loop — agent decides when to extract structured data from clinical narratives
+- `CHART_PARSE` audit event type for chart extraction traceability
+- Chart grounding awareness section in the clinical system prompt
+- 32 new tests for chart models, parser, and tool routing (191 total)
+
 ## [0.3.0] - 2026-03-11
 
 ### Added
@@ -69,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session context with conversation history management
 - 62 unit tests with full mock coverage
 
+[0.4.0]: https://github.com/RamosFBC/fangbot/releases/tag/v0.4.0
 [0.3.0]: https://github.com/RamosFBC/fangbot/releases/tag/v0.3.0
 [0.2.1]: https://github.com/RamosFBC/fangbot/releases/tag/v0.2.1
 [0.2.0]: https://github.com/RamosFBC/fangbot/releases/tag/v0.2.0
