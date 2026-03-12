@@ -58,12 +58,42 @@ The skill will provide you with a systematic clinical reasoning framework, decis
 """
 
 
-def build_system_prompt(available_skills: list[dict[str, str]] | None = None) -> str:
-    """Build the full system prompt, optionally including skill awareness."""
+_CHART_AWARENESS_SECTION = """
+## CHART GROUNDING
+
+You have access to the `parse_patient_chart` tool for structured extraction from clinical text.
+
+**When to use:**
+- When a patient case, clinical note, or chart data is presented
+- Before extracting specific values (labs, vitals, medications) for calculator input
+- When you need to cite the source of clinical facts in your reasoning
+
+**What it returns:**
+- Structured chart facts with categories (lab, vital, medication, diagnosis, procedure, allergy, imaging, culture)
+- Provenance: source description and location for each fact
+- Status: active, historical, or resolved
+- Warnings: conflicting values, ambiguous temporal references
+
+**How to use the results:**
+- Cite the `source` field when referencing extracted facts
+- Check `status` to distinguish active from historical conditions
+- Review `parse_warnings` before proceeding — address conflicts or ambiguities
+- Use extracted facts as input parameters for clinical calculators
+"""
+
+
+def build_system_prompt(
+    available_skills: list[dict[str, str]] | None = None,
+    chart_parsing_available: bool = False,
+) -> str:
+    """Build the full system prompt, optionally including skill and chart awareness."""
     prompt = CLINICAL_SYSTEM_PROMPT
 
     if available_skills:
         skill_lines = "\n".join(f"- **{s['name']}**: {s['description']}" for s in available_skills)
         prompt += _SKILL_AWARENESS_SECTION.format(skill_list=skill_lines)
+
+    if chart_parsing_available:
+        prompt += _CHART_AWARENESS_SECTION
 
     return prompt

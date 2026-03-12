@@ -117,6 +117,7 @@ class ChatState:
     tools: list
     mcp: object  # OpenMedicineMCPClient
     skill_loader: object | None = None  # ClinicalSkillLoader
+    chart_parser: object | None = None  # ChartParser
 
     def _rebuild_react(self) -> None:
         from fangbot.brain.react import ReActLoop
@@ -127,6 +128,7 @@ class ChatState:
             audit_logger=self.audit,
             max_iterations=self.settings.max_iterations,
             clinical_skill_loader=self.skill_loader,
+            chart_parser=self.chart_parser,
         )
 
 
@@ -465,6 +467,7 @@ async def _chat_async() -> None:
     """Async implementation of the interactive chat session."""
     from fangbot.brain.react import ReActLoop
     from fangbot.brain.system_prompt import build_system_prompt
+    from fangbot.chart.parser import ChartParser, get_chart_tool_definition
     from fangbot.gateway.renderer import ChatRenderer
     from fangbot.memory.audit import AuditLogger
     from fangbot.memory.session import SessionContext
@@ -487,7 +490,14 @@ async def _chat_async() -> None:
     # Load clinical skills
     skill_loader = ClinicalSkillLoader()
     available_skills = skill_loader.list_skills()
-    system_prompt = build_system_prompt(available_skills=available_skills)
+
+    # Create chart parser (uses same LLM provider for extraction)
+    chart_parser = ChartParser(provider)
+
+    system_prompt = build_system_prompt(
+        available_skills=available_skills,
+        chart_parsing_available=True,
+    )
     session = SessionContext(system_prompt=system_prompt)
 
     # Create the renderer
@@ -518,9 +528,10 @@ async def _chat_async() -> None:
         registry = ToolRegistry(mcp)
         tools = await registry.get_tools()
 
-        # Add clinical skill tool to MCP tools
+        # Add clinical skill tool and chart parser tool to MCP tools
         skill_tool_def = skill_loader.get_tool_definition()
-        all_tools = [skill_tool_def] + tools
+        chart_tool_def = get_chart_tool_definition()
+        all_tools = [skill_tool_def, chart_tool_def] + tools
 
         console.print(f"[dim]  Connected to OpenMedicine · {len(tools)} tools available[/dim]\n")
 
@@ -530,6 +541,7 @@ async def _chat_async() -> None:
             audit_logger=audit,
             max_iterations=settings.max_iterations,
             clinical_skill_loader=skill_loader,
+            chart_parser=chart_parser,
         )
 
         state = ChatState(
@@ -542,6 +554,7 @@ async def _chat_async() -> None:
             tools=all_tools,
             mcp=mcp,
             skill_loader=skill_loader,
+            chart_parser=chart_parser,
         )
 
         while True:
