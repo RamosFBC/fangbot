@@ -338,3 +338,56 @@ def check_status_conflicts(chart: PatientChart) -> list[Inconsistency]:
                     )
 
     return results
+
+
+def check_copy_forward(chart: PatientChart) -> list[Inconsistency]:
+    """Detect likely copy-forward errors: identical values across 3+ timestamps.
+
+    Copy-forward is a common EHR error where a clinician copies a previous
+    note without updating it. We flag when the same fact name has the exact
+    same value at 3 or more distinct timestamps.
+    """
+    results: list[Inconsistency] = []
+
+    # Group facts by (name_lower, category), only those with timestamps
+    groups: dict[tuple[str, FactCategory], list[ChartFact]] = defaultdict(list)
+    for fact in chart.facts:
+        if fact.timestamp is not None:
+            key = (fact.name.lower().strip(), fact.category)
+            groups[key].append(fact)
+
+    for (_name, _cat), facts in groups.items():
+        if len(facts) < 3:
+            continue
+
+        # Sort by timestamp
+        sorted_facts = sorted(facts, key=lambda f: f.timestamp)  # type: ignore[arg-type]
+
+        # Group by value
+        by_value: dict[str, list[ChartFact]] = defaultdict(list)
+        for f in sorted_facts:
+            by_value[f.value.strip()].append(f)
+
+        for value, occurrences in by_value.items():
+            # Only flag if 3+ distinct timestamps have the same value
+            distinct_timestamps = {f.timestamp for f in occurrences}
+            if len(distinct_timestamps) >= 3:
+                results.append(
+                    Inconsistency(
+                        type=InconsistencyType.COPY_FORWARD,
+                        severity=InconsistencySeverity.WARNING,
+                        description=(
+                            f"Possible copy-forward: '{occurrences[0].name}' has identical "
+                            f"value '{value}' across {len(distinct_timestamps)} dates "
+                            f"({occurrences[0].source} through {occurrences[-1].source})"
+                        ),
+                        fact_a=occurrences[0],
+                        fact_b=occurrences[-1],
+                        recommendation=(
+                            f"Review whether '{occurrences[0].name}' was actually "
+                            f"reassessed on each date or copy-forwarded"
+                        ),
+                    )
+                )
+
+    return results

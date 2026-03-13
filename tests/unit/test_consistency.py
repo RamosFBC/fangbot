@@ -12,6 +12,7 @@ from fangbot.chart.consistency import (
     InconsistencySeverity,
     InconsistencyType,
     check_allergy_medication_conflict,
+    check_copy_forward,
     check_duplicate_facts,
     check_impossible_vitals,
     check_status_conflicts,
@@ -672,3 +673,144 @@ class TestStatusConflicts:
         )
         results = check_status_conflicts(chart)
         assert len(results) == 1
+
+
+class TestCopyForward:
+    def test_identical_values_across_three_timestamps(self):
+        """Same fact value on 3+ distinct dates suggests copy-forward."""
+        facts = [
+            ChartFact(
+                name="Assessment",
+                value="Patient stable, continue current management",
+                category=FactCategory.DIAGNOSIS,
+                source="Progress note 3/5",
+                timestamp=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            ),
+            ChartFact(
+                name="Assessment",
+                value="Patient stable, continue current management",
+                category=FactCategory.DIAGNOSIS,
+                source="Progress note 3/6",
+                timestamp=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            ),
+            ChartFact(
+                name="Assessment",
+                value="Patient stable, continue current management",
+                category=FactCategory.DIAGNOSIS,
+                source="Progress note 3/7",
+                timestamp=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            ),
+        ]
+        chart = PatientChart(facts=facts, raw_text="...")
+        results = check_copy_forward(chart)
+        assert len(results) == 1
+        assert results[0].type == InconsistencyType.COPY_FORWARD
+        assert results[0].severity == InconsistencySeverity.WARNING
+        assert "3" in results[0].description  # mentions the count
+
+    def test_two_identical_values_no_flag(self):
+        """Two identical values could be legitimate — only flag at 3+."""
+        facts = [
+            ChartFact(
+                name="Assessment",
+                value="Patient stable",
+                category=FactCategory.DIAGNOSIS,
+                source="Note 3/5",
+                timestamp=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            ),
+            ChartFact(
+                name="Assessment",
+                value="Patient stable",
+                category=FactCategory.DIAGNOSIS,
+                source="Note 3/6",
+                timestamp=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            ),
+        ]
+        chart = PatientChart(facts=facts, raw_text="...")
+        results = check_copy_forward(chart)
+        assert len(results) == 0
+
+    def test_identical_values_no_timestamps_no_flag(self):
+        """Without timestamps we cannot detect copy-forward."""
+        facts = [
+            ChartFact(
+                name="Plan",
+                value="Continue meds",
+                category=FactCategory.DIAGNOSIS,
+                source="A",
+            ),
+            ChartFact(
+                name="Plan",
+                value="Continue meds",
+                category=FactCategory.DIAGNOSIS,
+                source="B",
+            ),
+            ChartFact(
+                name="Plan",
+                value="Continue meds",
+                category=FactCategory.DIAGNOSIS,
+                source="C",
+            ),
+        ]
+        chart = PatientChart(facts=facts, raw_text="...")
+        results = check_copy_forward(chart)
+        assert len(results) == 0
+
+    def test_different_values_across_timestamps_no_flag(self):
+        facts = [
+            ChartFact(
+                name="WBC",
+                value="12.0",
+                category=FactCategory.LAB,
+                source="CBC 3/5",
+                timestamp=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            ),
+            ChartFact(
+                name="WBC",
+                value="10.5",
+                category=FactCategory.LAB,
+                source="CBC 3/6",
+                timestamp=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            ),
+            ChartFact(
+                name="WBC",
+                value="8.2",
+                category=FactCategory.LAB,
+                source="CBC 3/7",
+                timestamp=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            ),
+        ]
+        chart = PatientChart(facts=facts, raw_text="...")
+        results = check_copy_forward(chart)
+        assert len(results) == 0
+
+    def test_copy_forward_provenance(self):
+        """The first and last occurrence should be referenced."""
+        facts = [
+            ChartFact(
+                name="Temp",
+                value="37.0 C",
+                category=FactCategory.VITAL,
+                source="Vitals 3/5",
+                timestamp=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            ),
+            ChartFact(
+                name="Temp",
+                value="37.0 C",
+                category=FactCategory.VITAL,
+                source="Vitals 3/6",
+                timestamp=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            ),
+            ChartFact(
+                name="Temp",
+                value="37.0 C",
+                category=FactCategory.VITAL,
+                source="Vitals 3/7",
+                timestamp=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            ),
+        ]
+        chart = PatientChart(facts=facts, raw_text="...")
+        results = check_copy_forward(chart)
+        assert len(results) == 1
+        assert results[0].fact_a == facts[0]
+        assert results[0].fact_b == facts[2]
