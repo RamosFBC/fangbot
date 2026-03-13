@@ -189,3 +189,109 @@ class EvidenceExtractor:
         """Extract the recommendation text."""
         match = self._RECOMMENDATION_PATTERN.search(text)
         return match.group(1).strip() if match else None
+
+
+# Guideline tool names for filtering
+GUIDELINE_TOOLS = {"search_guidelines", "retrieve_guideline"}
+
+
+class EvidenceTracker:
+    """Tracks evidence citations and guidelines consulted during a session."""
+
+    def __init__(self) -> None:
+        self._extractor = EvidenceExtractor()
+        self._citations: list[EvidenceCitation] = []
+        self._guidelines: list[GuidelineReference] = []
+        self._conflicts: list[EvidenceConflict] = []
+
+    @property
+    def citations(self) -> list[EvidenceCitation]:
+        return list(self._citations)
+
+    @property
+    def guidelines(self) -> list[GuidelineReference]:
+        return list(self._guidelines)
+
+    @property
+    def conflicts(self) -> list[EvidenceConflict]:
+        return list(self._conflicts)
+
+    @property
+    def has_conflicts(self) -> bool:
+        return len(self._conflicts) > 0
+
+    def add_citation(self, citation: EvidenceCitation) -> None:
+        self._citations.append(citation)
+
+    def add_guideline(self, ref: GuidelineReference) -> None:
+        """Add a guideline, merging sections if already tracked."""
+        for existing in self._guidelines:
+            if existing.guideline_id == ref.guideline_id:
+                for section in ref.sections_consulted:
+                    if section not in existing.sections_consulted:
+                        existing.sections_consulted.append(section)
+                return
+        self._guidelines.append(ref)
+
+    def add_conflict(
+        self,
+        topic: str,
+        citations: list[EvidenceCitation],
+        description: str,
+    ) -> None:
+        self._conflicts.append(
+            EvidenceConflict(topic=topic, citations=citations, description=description)
+        )
+
+    def process_tool_result(self, tool_name: str, result_text: str) -> None:
+        """Process an MCP tool result, extracting evidence if it's a guideline tool."""
+        if tool_name not in GUIDELINE_TOOLS:
+            return
+
+        if tool_name == "search_guidelines":
+            refs = self._extractor.extract_search_results(result_text)
+            for ref in refs:
+                self.add_guideline(ref)
+        elif tool_name == "retrieve_guideline":
+            citations = self._extractor.extract_citations(result_text, tool_name)
+            for c in citations:
+                self.add_citation(c)
+            ref = self._extractor.extract_guideline_reference(result_text)
+            if ref:
+                self.add_guideline(ref)
+
+    def summary(self) -> str:
+        """Generate a text summary of all evidence consulted."""
+        if not self._citations and not self._guidelines:
+            return ""
+
+        parts: list[str] = []
+
+        if self._guidelines:
+            parts.append("Guidelines consulted:")
+            for g in self._guidelines:
+                line = f"- {g.title}"
+                if g.organization:
+                    line += f" ({g.organization})"
+                if g.sections_consulted:
+                    line += f" — Sections: {', '.join(g.sections_consulted)}"
+                parts.append(line)
+
+        if self._citations:
+            parts.append("\nEvidence citations:")
+            for c in self._citations:
+                line = f"- {c.recommendation}"
+                if c.organization:
+                    line += f" [{c.organization}]"
+                if c.doi:
+                    line += f" (DOI: {c.doi})"
+                if c.pmid:
+                    line += f" (PMID: {c.pmid})"
+                parts.append(line)
+
+        if self._conflicts:
+            parts.append("\n⚠ Evidence conflicts detected:")
+            for conf in self._conflicts:
+                parts.append(f"- {conf.topic}: {conf.description}")
+
+        return "\n".join(parts)
