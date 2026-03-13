@@ -1,5 +1,12 @@
 """Chart grounding — structured extraction from clinical text with provenance."""
 
+from fangbot.chart.consistency import (
+    ConsistencyReport,
+    Inconsistency,
+    InconsistencySeverity,
+    InconsistencyType,
+    run_all_checks,
+)
 from fangbot.chart.episodes import ClinicalEpisode, segment_episodes
 from fangbot.chart.models import ChartFact, FactCategory, FactStatus, PatientChart
 from fangbot.chart.parser import ChartParser, get_chart_tool_definition
@@ -20,8 +27,12 @@ __all__ = [
     "ChartFact",
     "ChartParser",
     "ClinicalEpisode",
+    "ConsistencyReport",
     "FactCategory",
     "FactStatus",
+    "Inconsistency",
+    "InconsistencySeverity",
+    "InconsistencyType",
     "PatientChart",
     "PatientTimeline",
     "TemporalClassification",
@@ -35,5 +46,6 @@ __all__ = [
     "compare_to_baseline",
     "detect_trends",
     "get_chart_tool_definition",
+    "run_all_checks",
     "segment_episodes",
 ]

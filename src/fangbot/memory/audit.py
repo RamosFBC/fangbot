@@ -28,6 +28,7 @@ class EventType(str, Enum):
     TEMPORAL_CLASSIFICATION = "temporal_classification"
     EPISODE_SEGMENTATION = "episode_segmentation"
     TIMELINE_GENERATION = "timeline_generation"
+    CHART_CONSISTENCY = "chart_consistency"
     SYNTHESIS = "synthesis"
     CONFIDENCE_ASSESSMENT = "confidence_assessment"
     MISSING_DATA_DETECTED = "missing_data_detected"
