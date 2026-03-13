@@ -6,7 +6,7 @@ import logging
 import re
 from enum import Enum
 
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, Field, computed_field
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,9 @@ class UncertaintyAssessment(BaseModel):
 
     confidence: ConfidenceLevel
     reasoning: str
-    missing_data: list[str] = []
-    contradictions: list[str] = []
+    missing_data: list[str] = Field(default_factory=list)
+    contradictions: list[str] = Field(default_factory=list)
+    would_change: list[str] = Field(default_factory=list)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -61,6 +62,7 @@ _UNCERTAINTY_BLOCK_RE = re.compile(
     r"Reasoning:\s*(?P<reasoning>.+?)\s*\n"
     r"Missing data:\s*(?P<missing>.+?)\s*\n"
     r"Contradictions:\s*(?P<contradictions>.+?)\s*\n"
+    r"Would change answer:\s*(?P<would_change>.+?)\s*\n"
     r"---",
     re.IGNORECASE,
 )
@@ -72,7 +74,7 @@ def _parse_list_field(raw: str) -> list[str]:
     return [
         item
         for item in items
-        if item and item.lower() not in ("none", "n/a", "none reported")
+        if item and item.lower() not in ("none", "n/a", "none reported", "none detected")
     ]
 
 
@@ -94,6 +96,7 @@ def parse_uncertainty_assessment(text: str) -> UncertaintyAssessment | None:
         reasoning=match.group("reasoning").strip(),
         missing_data=_parse_list_field(match.group("missing")),
         contradictions=_parse_list_field(match.group("contradictions")),
+        would_change=_parse_list_field(match.group("would_change")),
     )
 
 

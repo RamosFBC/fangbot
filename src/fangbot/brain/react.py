@@ -152,11 +152,6 @@ class ReActLoop:
             escalation_recommended=assessment.escalation_recommended,
         )
 
-        for item in assessment.missing_data:
-            self._audit.log(EventType.MISSING_DATA_DETECTED, {"item": item})
-        for item in assessment.contradictions:
-            self._audit.log(EventType.CONTRADICTION_DETECTED, {"item": item})
-
     async def _execute_tool_calls(
         self,
         tool_calls: list[ToolCall],

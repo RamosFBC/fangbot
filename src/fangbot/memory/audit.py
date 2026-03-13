@@ -99,7 +99,7 @@ class AuditLogger:
         contradictions: list[str],
         escalation_recommended: bool,
     ) -> AuditEvent:
-        return self.log(
+        event = self.log(
             EventType.CONFIDENCE_ASSESSMENT,
             {
                 "confidence": confidence,
@@ -109,6 +109,13 @@ class AuditLogger:
                 "escalation_recommended": escalation_recommended,
             },
         )
+
+        for item in missing_data:
+            self.log(EventType.MISSING_DATA_DETECTED, {"item": item})
+        for item in contradictions:
+            self.log(EventType.CONTRADICTION_DETECTED, {"item": item})
+
+        return event
 
     def get_events(self) -> list[AuditEvent]:
         """Read all events from the current session's audit file."""

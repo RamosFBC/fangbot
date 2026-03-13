@@ -220,6 +220,7 @@ class TestReActLoop:
             "Reasoning: All parameters present and validated\n"
             "Missing data: None\n"
             "Contradictions: None\n"
+            "Would change answer: None\n"
             "---"
         )
         provider = MockProvider(
@@ -305,6 +306,7 @@ class TestReActLoop:
             "Reasoning: Age estimated\n"
             "Missing data: Exact DOB\n"
             "Contradictions: None\n"
+            "Would change answer: Exact DOB\n"
             "---"
         )
         provider = MockProvider(

@@ -92,6 +92,7 @@ Confidence: <HIGH | MODERATE | LOW | INSUFFICIENT_DATA>
 Reasoning: <one-sentence justification for the confidence level>
 Missing data: <semicolon-separated list, or "None">
 Contradictions: <semicolon-separated list, or "None">
+Would change answer: <semicolon-separated list of data that, if available, could change the clinical answer, or "None">
 ---
 
 **Confidence level criteria:**

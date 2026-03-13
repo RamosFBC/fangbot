@@ -57,6 +57,7 @@ class TestParseUncertaintyAssessment:
             "Reasoning: Age was estimated\n"
             "Missing data: Exact DOB; Smoking status\n"
             "Contradictions: None\n"
+            "Would change answer: Exact DOB\n"
             "---"
         )
         result = parse_uncertainty_assessment(text)
@@ -65,6 +66,7 @@ class TestParseUncertaintyAssessment:
         assert result.reasoning == "Age was estimated"
         assert result.missing_data == ["Exact DOB", "Smoking status"]
         assert result.contradictions == []
+        assert result.would_change == ["Exact DOB"]
 
     def test_high_confidence_no_missing(self) -> None:
         text = (
@@ -74,6 +76,7 @@ class TestParseUncertaintyAssessment:
             "Reasoning: All parameters present and validated\n"
             "Missing data: None\n"
             "Contradictions: None\n"
+            "Would change answer: None\n"
             "---"
         )
         result = parse_uncertainty_assessment(text)
@@ -81,6 +84,7 @@ class TestParseUncertaintyAssessment:
         assert result.confidence == ConfidenceLevel.HIGH
         assert result.missing_data == []
         assert result.contradictions == []
+        assert result.would_change == []
         assert result.escalation_recommended is False
 
     def test_multiple_items_in_lists(self) -> None:
@@ -90,12 +94,14 @@ class TestParseUncertaintyAssessment:
             "Reasoning: Several gaps\n"
             "Missing data: Creatinine; Weight; Height\n"
             "Contradictions: BP 120/80 vs BP 140/90; Age 65 vs Age 70\n"
+            "Would change answer: Creatinine; Weight\n"
             "---"
         )
         result = parse_uncertainty_assessment(text)
         assert result is not None
         assert len(result.missing_data) == 3
         assert len(result.contradictions) == 2
+        assert result.would_change == ["Creatinine", "Weight"]
 
     def test_contradictions_present(self) -> None:
         text = (
@@ -104,11 +110,13 @@ class TestParseUncertaintyAssessment:
             "Reasoning: Conflicting values\n"
             "Missing data: None\n"
             "Contradictions: Creatinine 1.2 vs 2.4\n"
+            "Would change answer: Creatinine\n"
             "---"
         )
         result = parse_uncertainty_assessment(text)
         assert result is not None
         assert result.contradictions == ["Creatinine 1.2 vs 2.4"]
+        assert result.would_change == ["Creatinine"]
 
     def test_insufficient_data_level(self) -> None:
         text = (
@@ -117,6 +125,7 @@ class TestParseUncertaintyAssessment:
             "Reasoning: No labs available\n"
             "Missing data: All lab values\n"
             "Contradictions: None\n"
+            "Would change answer: All lab values\n"
             "---"
         )
         result = parse_uncertainty_assessment(text)
@@ -137,6 +146,7 @@ class TestParseUncertaintyAssessment:
             "Reasoning: Complete data\n"
             "Missing data: None\n"
             "Contradictions: None\n"
+            "Would change answer: None\n"
             "---"
         )
         stripped = strip_uncertainty_block(text)
@@ -155,6 +165,7 @@ class TestParseUncertaintyAssessment:
             "Reasoning: OK\n"
             "Missing data: None\n"
             "Contradictions: None\n"
+            "Would change answer: None\n"
             "---\n"
         )
         stripped = strip_uncertainty_block(text)
@@ -169,6 +180,7 @@ class TestUncertaintyEdgeCases:
             "Reasoning:   All data present  \n"
             "Missing data:   None  \n"
             "Contradictions:   None  \n"
+            "Would change answer:   None  \n"
             "---"
         )
         result = parse_uncertainty_assessment(text)
@@ -183,6 +195,7 @@ class TestUncertaintyEdgeCases:
             "Reasoning: Some inference needed\n"
             "Missing data: None\n"
             "Contradictions: None\n"
+            "Would change answer: None\n"
             "---"
         )
         result = parse_uncertainty_assessment(text)
@@ -196,6 +209,7 @@ class TestUncertaintyEdgeCases:
             "Reasoning: Bad level\n"
             "Missing data: None\n"
             "Contradictions: None\n"
+            "Would change answer: None\n"
             "---"
         )
         result = parse_uncertainty_assessment(text)
@@ -208,12 +222,14 @@ class TestUncertaintyEdgeCases:
             "Reasoning: Gaps\n"
             "Missing data:  Creatinine ;  Weight ;  Height \n"
             "Contradictions: BP conflict ; Age conflict \n"
+            "Would change answer: Creatinine ; Weight \n"
             "---"
         )
         result = parse_uncertainty_assessment(text)
         assert result is not None
         assert result.missing_data == ["Creatinine", "Weight", "Height"]
         assert result.contradictions == ["BP conflict", "Age conflict"]
+        assert result.would_change == ["Creatinine", "Weight"]
 
     def test_multiline_synthesis_preserved_after_strip(self) -> None:
         text = (
@@ -225,6 +241,7 @@ class TestUncertaintyEdgeCases:
             "Reasoning: OK\n"
             "Missing data: None\n"
             "Contradictions: None\n"
+            "Would change answer: None\n"
             "---"
         )
         stripped = strip_uncertainty_block(text)
@@ -244,6 +261,7 @@ class TestUncertaintyEdgeCases:
             reasoning="Age estimated from context",
             missing_data=["Exact DOB", "Smoking status"],
             contradictions=["BP 120/80 vs 140/90"],
+            would_change=["Exact DOB"],
         )
         json_str = assessment.model_dump_json()
         restored = UncertaintyAssessment.model_validate_json(json_str)
@@ -251,4 +269,49 @@ class TestUncertaintyEdgeCases:
         assert restored.reasoning == "Age estimated from context"
         assert restored.missing_data == ["Exact DOB", "Smoking status"]
         assert restored.contradictions == ["BP 120/80 vs 140/90"]
+        assert restored.would_change == ["Exact DOB"]
         assert restored.escalation_recommended is False
+
+    def test_would_change_parsed_correctly(self) -> None:
+        text = (
+            "---\n"
+            "Confidence: LOW\n"
+            "Reasoning: Key data missing\n"
+            "Missing data: Creatinine; eGFR\n"
+            "Contradictions: None\n"
+            "Would change answer: Creatinine; eGFR; Medication list\n"
+            "---"
+        )
+        result = parse_uncertainty_assessment(text)
+        assert result is not None
+        assert result.would_change == ["Creatinine", "eGFR", "Medication list"]
+
+    def test_would_change_none_returns_empty_list(self) -> None:
+        text = (
+            "---\n"
+            "Confidence: HIGH\n"
+            "Reasoning: All present\n"
+            "Missing data: None\n"
+            "Contradictions: None\n"
+            "Would change answer: None\n"
+            "---"
+        )
+        result = parse_uncertainty_assessment(text)
+        assert result is not None
+        assert result.would_change == []
+
+    def test_none_detected_filtered(self) -> None:
+        text = (
+            "---\n"
+            "Confidence: HIGH\n"
+            "Reasoning: All present\n"
+            "Missing data: None detected\n"
+            "Contradictions: None detected\n"
+            "Would change answer: None detected\n"
+            "---"
+        )
+        result = parse_uncertainty_assessment(text)
+        assert result is not None
+        assert result.missing_data == []
+        assert result.contradictions == []
+        assert result.would_change == []
