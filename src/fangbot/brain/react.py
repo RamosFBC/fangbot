@@ -8,6 +8,11 @@ from dataclasses import dataclass, field
 from fangbot.brain.guardrails import GuardrailResult, run_all_guardrails
 from fangbot.brain.progress import NullProgress, ProgressCallback
 from fangbot.brain.providers.base import LLMProvider
+from fangbot.brain.uncertainty import (
+    UncertaintyAssessment,
+    parse_uncertainty_assessment,
+    strip_uncertainty_block,
+)
 from fangbot.memory.audit import AuditLogger, EventType
 from fangbot.memory.session import SessionContext
 from fangbot.models import ToolCall, ToolDefinition
@@ -29,6 +34,7 @@ class ReActResult:
     iterations: int = 0
     guardrail_violations: list[str] = field(default_factory=list)
     guardrail_passed: bool = True
+    uncertainty: UncertaintyAssessment | None = None
 
 
 class ReActLoop:
@@ -110,6 +116,7 @@ class ReActLoop:
                     for v in guardrail.violations:
                         self._audit.log(EventType.GUARDRAIL_VIOLATION, {"violation": v})
 
+                self._extract_uncertainty(result)
                 self._audit.log_synthesis(result.synthesis)
                 session.add_assistant_message(result.synthesis)
                 return result
@@ -123,9 +130,27 @@ class ReActLoop:
             "I was unable to complete the analysis within the allowed number of steps. "
             "Please try rephrasing your question or providing more specific information."
         )
+        self._extract_uncertainty(result)
         self._audit.log_synthesis(result.synthesis)
         session.add_assistant_message(result.synthesis)
         return result
+
+    def _extract_uncertainty(self, result: ReActResult) -> None:
+        """Parse uncertainty block from synthesis and log audit events."""
+        assessment = parse_uncertainty_assessment(result.synthesis)
+        if assessment is None:
+            return
+
+        result.uncertainty = assessment
+        result.synthesis = strip_uncertainty_block(result.synthesis)
+
+        self._audit.log_confidence_assessment(
+            confidence=assessment.confidence.value,
+            reasoning=assessment.reasoning,
+            missing_data=assessment.missing_data,
+            contradictions=assessment.contradictions,
+            escalation_recommended=assessment.escalation_recommended,
+        )
 
     async def _execute_tool_calls(
         self,
@@ -282,6 +307,7 @@ class ReActLoop:
                     final_check = run_all_guardrails(result.tool_calls_made)
                     result.guardrail_passed = final_check.passed
                     result.guardrail_violations = final_check.violations
+                    self._extract_uncertainty(result)
                     self._audit.log_synthesis(result.synthesis)
                     session.add_assistant_message(result.synthesis)
                     return result

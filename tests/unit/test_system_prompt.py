@@ -42,3 +42,29 @@ class TestSystemPrompt:
         )
         assert "test_skill" in prompt
         assert "parse_patient_chart" in prompt
+
+    def test_uncertainty_section_included_when_enabled(self) -> None:
+        prompt = build_system_prompt(uncertainty_calibration=True)
+        assert "UNCERTAINTY CALIBRATION" in prompt
+        assert "Confidence:" in prompt
+
+    def test_uncertainty_section_excluded_by_default(self) -> None:
+        prompt = build_system_prompt()
+        assert "UNCERTAINTY CALIBRATION" not in prompt
+
+    def test_uncertainty_format_has_all_levels(self) -> None:
+        prompt = build_system_prompt(uncertainty_calibration=True)
+        assert "HIGH" in prompt
+        assert "MODERATE" in prompt
+        assert "LOW" in prompt
+        assert "INSUFFICIENT_DATA" in prompt
+
+    def test_all_sections_combine_correctly(self) -> None:
+        prompt = build_system_prompt(
+            available_skills=[{"name": "s1", "description": "d1"}],
+            chart_parsing_available=True,
+            uncertainty_calibration=True,
+        )
+        assert "load_clinical_skill" in prompt
+        assert "parse_patient_chart" in prompt
+        assert "UNCERTAINTY CALIBRATION" in prompt

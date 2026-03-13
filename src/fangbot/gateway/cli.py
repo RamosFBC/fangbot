@@ -497,6 +497,7 @@ async def _chat_async() -> None:
     system_prompt = build_system_prompt(
         available_skills=available_skills,
         chart_parsing_available=True,
+        uncertainty_calibration=True,
     )
     session = SessionContext(system_prompt=system_prompt)
 

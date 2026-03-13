@@ -102,3 +102,33 @@ class TestSessionContext:
 
         assert session.messages == []
         assert session.tool_calls_made == []
+
+
+class TestConfidenceAuditEvents:
+    def test_confidence_assessment_event_type_exists(self):
+        assert EventType.CONFIDENCE_ASSESSMENT == "confidence_assessment"
+
+    def test_missing_data_detected_event_type_exists(self):
+        assert EventType.MISSING_DATA_DETECTED == "missing_data_detected"
+
+    def test_contradiction_detected_event_type_exists(self):
+        assert EventType.CONTRADICTION_DETECTED == "contradiction_detected"
+
+    def test_log_confidence_assessment(self, tmp_path):
+        logger = AuditLogger(log_dir=str(tmp_path))
+        logger.start_session()
+
+        event = logger.log_confidence_assessment(
+            confidence="moderate",
+            reasoning="Age was estimated",
+            missing_data=["Exact DOB"],
+            contradictions=[],
+            escalation_recommended=False,
+        )
+
+        assert event.event_type == EventType.CONFIDENCE_ASSESSMENT
+        assert event.data["confidence"] == "moderate"
+        assert event.data["reasoning"] == "Age was estimated"
+        assert event.data["missing_data"] == ["Exact DOB"]
+        assert event.data["contradictions"] == []
+        assert event.data["escalation_recommended"] is False

@@ -25,6 +25,9 @@ class EventType(str, Enum):
     SKILL_LOADED = "skill_loaded"
     CHART_PARSE = "chart_parse"
     SYNTHESIS = "synthesis"
+    CONFIDENCE_ASSESSMENT = "confidence_assessment"
+    MISSING_DATA_DETECTED = "missing_data_detected"
+    CONTRADICTION_DETECTED = "contradiction_detected"
 
 
 class AuditEvent(BaseModel):
@@ -87,6 +90,32 @@ class AuditLogger:
 
     def log_synthesis(self, synthesis: str) -> AuditEvent:
         return self.log(EventType.SYNTHESIS, {"synthesis": synthesis})
+
+    def log_confidence_assessment(
+        self,
+        confidence: str,
+        reasoning: str,
+        missing_data: list[str],
+        contradictions: list[str],
+        escalation_recommended: bool,
+    ) -> AuditEvent:
+        event = self.log(
+            EventType.CONFIDENCE_ASSESSMENT,
+            {
+                "confidence": confidence,
+                "reasoning": reasoning,
+                "missing_data": missing_data,
+                "contradictions": contradictions,
+                "escalation_recommended": escalation_recommended,
+            },
+        )
+
+        for item in missing_data:
+            self.log(EventType.MISSING_DATA_DETECTED, {"item": item})
+        for item in contradictions:
+            self.log(EventType.CONTRADICTION_DETECTED, {"item": item})
+
+        return event
 
     def get_events(self) -> list[AuditEvent]:
         """Read all events from the current session's audit file."""
