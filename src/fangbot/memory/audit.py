@@ -24,6 +24,10 @@ class EventType(str, Enum):
     GUARDRAIL_VIOLATION = "guardrail_violation"
     SKILL_LOADED = "skill_loaded"
     CHART_PARSE = "chart_parse"
+    TREND_ANALYSIS = "trend_analysis"
+    TEMPORAL_CLASSIFICATION = "temporal_classification"
+    EPISODE_SEGMENTATION = "episode_segmentation"
+    TIMELINE_GENERATION = "timeline_generation"
     SYNTHESIS = "synthesis"
 
 

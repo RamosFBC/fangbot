@@ -471,3 +471,38 @@ class TestCompareToBaseline:
         assert len(comparisons) == 2
         names = {c.fact_name for c in comparisons}
         assert names == {"Creatinine", "BUN"}
+
+
+class TestPublicAPI:
+    def test_imports_from_chart_package(self):
+        """All temporal types are importable from the chart package."""
+        from fangbot.chart import (
+            Trend,
+            TrendDirection,
+            TrendPoint,
+            detect_trends,
+            TemporalClassification,
+            TemporalFact,
+            TimelineEntry,
+            PatientTimeline,
+            BaselineComparison,
+            classify_facts,
+            build_timeline,
+            compare_to_baseline,
+            ClinicalEpisode,
+            segment_episodes,
+        )
+        # Just verify they're importable
+        assert TrendDirection.RISING == "rising"
+        assert TemporalClassification.NEW == "new"
+
+
+class TestAuditEventTypes:
+    def test_new_event_types_exist(self):
+        """New temporal event types are available in EventType."""
+        from fangbot.memory.audit import EventType
+
+        assert EventType.TREND_ANALYSIS == "trend_analysis"
+        assert EventType.TEMPORAL_CLASSIFICATION == "temporal_classification"
+        assert EventType.EPISODE_SEGMENTATION == "episode_segmentation"
+        assert EventType.TIMELINE_GENERATION == "timeline_generation"
