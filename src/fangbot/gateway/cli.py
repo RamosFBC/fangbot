@@ -119,6 +119,7 @@ class ChatState:
     skill_loader: object | None = None  # ClinicalSkillLoader
     chart_parser: object | None = None  # ChartParser
     workflow_engine: object | None = None  # WorkflowEngine
+    evidence_tracker: object | None = None  # EvidenceTracker
 
     def _rebuild_react(self) -> None:
         from fangbot.brain.react import ReActLoop
@@ -131,6 +132,7 @@ class ChatState:
             clinical_skill_loader=self.skill_loader,
             chart_parser=self.chart_parser,
             workflow_engine=self.workflow_engine,
+            evidence_tracker=self.evidence_tracker,
         )
 
 
@@ -474,6 +476,7 @@ async def _chat_async() -> None:
     from fangbot.memory.audit import AuditLogger
     from fangbot.memory.session import SessionContext
     from fangbot.skills.clinical_loader import ClinicalSkillLoader
+    from fangbot.skills.evidence import EvidenceTracker
     from fangbot.skills.mcp_client import OpenMedicineMCPClient
     from fangbot.skills.tool_registry import ToolRegistry
 
@@ -519,6 +522,7 @@ async def _chat_async() -> None:
         chart_parsing_available=True,
         uncertainty_calibration=True,
         available_workflows=available_workflows,
+        evidence_retrieval=True,
     )
     session = SessionContext(system_prompt=system_prompt)
 
@@ -558,6 +562,8 @@ async def _chat_async() -> None:
 
         console.print(f"[dim]  Connected to OpenMedicine · {len(tools)} tools available[/dim]\n")
 
+        evidence_tracker = EvidenceTracker()
+
         react = ReActLoop(
             provider=provider,
             mcp_client=mcp,
@@ -566,6 +572,7 @@ async def _chat_async() -> None:
             clinical_skill_loader=skill_loader,
             chart_parser=chart_parser,
             workflow_engine=workflow_engine,
+            evidence_tracker=evidence_tracker,
         )
 
         state = ChatState(
@@ -580,6 +587,7 @@ async def _chat_async() -> None:
             skill_loader=skill_loader,
             chart_parser=chart_parser,
             workflow_engine=workflow_engine,
+            evidence_tracker=evidence_tracker,
         )
 
         while True:
