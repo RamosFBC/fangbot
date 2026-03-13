@@ -386,3 +386,88 @@ class TestBuildTimeline:
 
         assert "48" in timeline.summary or "2" in timeline.summary  # hours or days
         assert "2 events" in timeline.summary or "2 entries" in timeline.summary
+
+
+from fangbot.chart.temporal import BaselineComparison, compare_to_baseline
+
+
+class TestBaselineComparison:
+    def test_creation(self):
+        comp = BaselineComparison(
+            fact_name="Creatinine",
+            baseline_value=1.0,
+            current_value=2.1,
+            change_absolute=1.1,
+            change_percent=110.0,
+            summary="Creatinine 110% above baseline (1.0 -> 2.1)",
+        )
+        assert comp.change_percent == pytest.approx(110.0)
+
+
+class TestCompareToBaseline:
+    def test_creatinine_above_baseline(self):
+        """Current value higher than earliest value (baseline)."""
+        facts = [
+            _fact("Creatinine", "1.0 mg/dL", FactCategory.LAB, 0),
+            _fact("Creatinine", "1.5 mg/dL", FactCategory.LAB, 24),
+            _fact("Creatinine", "2.1 mg/dL", FactCategory.LAB, 48),
+        ]
+        chart = _chart_with_facts(facts)
+        comparisons = compare_to_baseline(chart)
+
+        assert len(comparisons) == 1
+        comp = comparisons[0]
+        assert comp.fact_name == "Creatinine"
+        assert comp.baseline_value == pytest.approx(1.0)
+        assert comp.current_value == pytest.approx(2.1)
+        assert comp.change_absolute == pytest.approx(1.1)
+        assert comp.change_percent == pytest.approx(110.0)
+
+    def test_hemoglobin_below_baseline(self):
+        """Current value lower than baseline."""
+        facts = [
+            _fact("Hemoglobin", "14.0 g/dL", FactCategory.LAB, 0),
+            _fact("Hemoglobin", "10.0 g/dL", FactCategory.LAB, 48),
+        ]
+        chart = _chart_with_facts(facts)
+        comparisons = compare_to_baseline(chart)
+
+        assert len(comparisons) == 1
+        comp = comparisons[0]
+        assert comp.change_absolute == pytest.approx(-4.0)
+        assert comp.change_percent == pytest.approx(-28.571, abs=0.01)
+
+    def test_no_change(self):
+        """Stable values have 0% change."""
+        facts = [
+            _fact("Sodium", "140 mEq/L", FactCategory.LAB, 0),
+            _fact("Sodium", "140 mEq/L", FactCategory.LAB, 24),
+        ]
+        chart = _chart_with_facts(facts)
+        comparisons = compare_to_baseline(chart)
+
+        assert len(comparisons) == 1
+        assert comparisons[0].change_percent == pytest.approx(0.0)
+
+    def test_single_value_no_comparison(self):
+        """A single value has no baseline to compare against."""
+        facts = [_fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 0)]
+        chart = _chart_with_facts(facts)
+        comparisons = compare_to_baseline(chart)
+
+        assert len(comparisons) == 0
+
+    def test_multiple_labs_compared(self):
+        """Each lab with 2+ values gets its own comparison."""
+        facts = [
+            _fact("Creatinine", "1.0 mg/dL", FactCategory.LAB, 0),
+            _fact("Creatinine", "2.0 mg/dL", FactCategory.LAB, 24),
+            _fact("BUN", "15 mg/dL", FactCategory.LAB, 0),
+            _fact("BUN", "30 mg/dL", FactCategory.LAB, 24),
+        ]
+        chart = _chart_with_facts(facts)
+        comparisons = compare_to_baseline(chart)
+
+        assert len(comparisons) == 2
+        names = {c.fact_name for c in comparisons}
+        assert names == {"Creatinine", "BUN"}

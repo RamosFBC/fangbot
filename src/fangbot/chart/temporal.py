@@ -45,6 +45,17 @@ class PatientTimeline(BaseModel):
     summary: str = ""
 
 
+class BaselineComparison(BaseModel):
+    """Comparison of current value against the patient's baseline (earliest value)."""
+
+    fact_name: str
+    baseline_value: float
+    current_value: float
+    change_absolute: float
+    change_percent: float
+    summary: str = ""
+
+
 import re
 from collections import defaultdict
 
@@ -221,3 +232,73 @@ def build_timeline(chart: PatientChart) -> PatientTimeline:
     summary = f"{span_str} timeline with {n} entries"
 
     return PatientTimeline(entries=entries, start=start, end=end, summary=summary)
+
+
+def compare_to_baseline(
+    chart: PatientChart,
+    categories: set[FactCategory] | None = None,
+) -> list[BaselineComparison]:
+    """Compare current values against the patient's baseline for each numeric series.
+
+    Baseline is defined as the earliest timestamped value for each fact name.
+    Current is the latest timestamped value.
+
+    Args:
+        chart: Patient chart with extracted facts.
+        categories: Which categories to analyze. Defaults to LAB and VITAL.
+
+    Returns:
+        List of BaselineComparison, one per fact name that has 2+ numeric values.
+    """
+    if categories is None:
+        categories = {FactCategory.LAB, FactCategory.VITAL}
+
+    # Group timestamped numeric facts by name
+    series: dict[str, list[tuple[float, datetime]]] = defaultdict(list)
+    for fact in chart.facts:
+        if fact.category not in categories:
+            continue
+        if fact.timestamp is None:
+            continue
+        num = _extract_numeric(fact.value)
+        if num is not None:
+            series[fact.name].append((num, fact.timestamp))
+
+    comparisons: list[BaselineComparison] = []
+    for name, points in sorted(series.items()):
+        if len(points) < 2:
+            continue
+        points.sort(key=lambda p: p[1])
+        baseline = points[0][0]
+        current = points[-1][0]
+        change_abs = current - baseline
+
+        if abs(baseline) < 1e-12:
+            change_pct = 0.0
+        else:
+            change_pct = (change_abs / baseline) * 100.0
+
+        if change_pct > 0:
+            direction = "above"
+        elif change_pct < 0:
+            direction = "below"
+        else:
+            direction = "at"
+
+        summary = (
+            f"{name} {abs(change_pct):.0f}% {direction} baseline "
+            f"({baseline:g} -> {current:g})"
+        )
+
+        comparisons.append(
+            BaselineComparison(
+                fact_name=name,
+                baseline_value=baseline,
+                current_value=current,
+                change_absolute=change_abs,
+                change_percent=change_pct,
+                summary=summary,
+            )
+        )
+
+    return comparisons
