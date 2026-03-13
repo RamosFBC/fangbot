@@ -201,3 +201,99 @@ class TestClassifyFacts:
 
         assert len(classified) == 1
         assert classified[0].classification == TemporalClassification.CHRONIC
+
+
+from fangbot.chart.episodes import ClinicalEpisode, segment_episodes
+
+
+class TestClinicalEpisode:
+    def test_creation(self):
+        facts = [
+            _fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 0),
+            _fact("BUN", "35 mg/dL", FactCategory.LAB, 0),
+        ]
+        ep = ClinicalEpisode(
+            label="Renal panel",
+            facts=facts,
+            start=BASE_TIME,
+            end=BASE_TIME,
+            category=FactCategory.LAB,
+        )
+        assert ep.label == "Renal panel"
+        assert len(ep.facts) == 2
+        assert ep.start == BASE_TIME
+
+
+class TestSegmentEpisodes:
+    def test_single_cluster(self):
+        """Facts within the time window are grouped into one episode."""
+        facts = [
+            _fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 0),
+            _fact("BUN", "35 mg/dL", FactCategory.LAB, 1),
+            _fact("Potassium", "4.2 mEq/L", FactCategory.LAB, 2),
+        ]
+        chart = _chart_with_facts(facts)
+        episodes = segment_episodes(chart, window_hours=6)
+
+        assert len(episodes) == 1
+        assert len(episodes[0].facts) == 3
+        assert episodes[0].category == FactCategory.LAB
+
+    def test_two_clusters_by_time(self):
+        """Facts separated by > window_hours form separate episodes."""
+        facts = [
+            _fact("Creatinine", "1.2 mg/dL", FactCategory.LAB, 0),
+            _fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 24),
+        ]
+        chart = _chart_with_facts(facts)
+        episodes = segment_episodes(chart, window_hours=6)
+
+        assert len(episodes) == 2
+
+    def test_separate_categories_separate_episodes(self):
+        """Different categories at the same time form separate episodes."""
+        facts = [
+            _fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 0),
+            _fact("Heart Rate", "88 bpm", FactCategory.VITAL, 0),
+        ]
+        chart = _chart_with_facts(facts)
+        episodes = segment_episodes(chart, window_hours=6)
+
+        assert len(episodes) == 2
+        categories = {ep.category for ep in episodes}
+        assert categories == {FactCategory.LAB, FactCategory.VITAL}
+
+    def test_empty_chart(self):
+        """Empty chart produces no episodes."""
+        chart = _chart_with_facts([])
+        episodes = segment_episodes(chart, window_hours=6)
+        assert len(episodes) == 0
+
+    def test_facts_without_timestamps_excluded(self):
+        """Facts without timestamps are not included in episodes."""
+        facts = [
+            ChartFact(
+                name="Aspirin",
+                value="81mg daily",
+                category=FactCategory.MEDICATION,
+                source="Med list",
+            ),
+        ]
+        chart = _chart_with_facts(facts)
+        episodes = segment_episodes(chart, window_hours=6)
+        assert len(episodes) == 0
+
+    def test_episode_start_end_correct(self):
+        """Episode start/end bracket the contained facts."""
+        facts = [
+            _fact("Creatinine", "1.2 mg/dL", FactCategory.LAB, 0),
+            _fact("BUN", "20 mg/dL", FactCategory.LAB, 2),
+            _fact("Potassium", "4.5 mEq/L", FactCategory.LAB, 4),
+        ]
+        chart = _chart_with_facts(facts)
+        episodes = segment_episodes(chart, window_hours=6)
+
+        assert len(episodes) == 1
+        ep = episodes[0]
+        assert ep.start == BASE_TIME
+        assert ep.end == BASE_TIME + timedelta(hours=4)
