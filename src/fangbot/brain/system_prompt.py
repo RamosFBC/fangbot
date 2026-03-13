@@ -110,10 +110,33 @@ Would change answer: <semicolon-separated list of data that, if available, could
 """
 
 
+_WORKFLOW_AWARENESS_SECTION = """
+## CLINICAL WORKFLOWS
+
+You have access to the `run_workflow` tool for executing structured clinical workflows.
+Each workflow runs a multi-step pipeline (data extraction, analysis, LLM generation) and produces
+an editable draft with provenance tracking.
+
+**Available workflows:**
+{workflow_list}
+
+**When to use:**
+- When a clinician asks for a summary, handoff, or structured clinical document
+- When the task matches one of the available workflow descriptions
+- The workflow will automatically analyze trends, check consistency, and generate a draft
+
+**Output:**
+- All workflow outputs are DRAFTS — they require clinician review and confirmation
+- Each section includes provenance citations
+- Warnings about data quality or missing information are surfaced
+"""
+
+
 def build_system_prompt(
     available_skills: list[dict[str, str]] | None = None,
     chart_parsing_available: bool = False,
     uncertainty_calibration: bool = False,
+    available_workflows: list[dict[str, str]] | None = None,
 ) -> str:
     """Build the full system prompt, optionally including skill and chart awareness."""
     prompt = CLINICAL_SYSTEM_PROMPT
@@ -127,5 +150,11 @@ def build_system_prompt(
 
     if uncertainty_calibration:
         prompt += _UNCERTAINTY_CALIBRATION_SECTION
+
+    if available_workflows:
+        wf_lines = "\n".join(
+            f"- **{w['name']}**: {w['description']}" for w in available_workflows
+        )
+        prompt += _WORKFLOW_AWARENESS_SECTION.format(workflow_list=wf_lines)
 
     return prompt
