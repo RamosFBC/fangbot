@@ -8,6 +8,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 import re
+from collections import defaultdict
 
 from fangbot.chart.models import ChartFact, FactCategory, FactStatus, PatientChart
 
@@ -174,5 +175,67 @@ def check_impossible_vitals(chart: PatientChart) -> list[Inconsistency]:
                         recommendation=f"Review {fact.name} entry for data entry error",
                     )
                 )
+
+    return results
+
+
+def check_duplicate_facts(chart: PatientChart) -> list[Inconsistency]:
+    """Detect duplicate or conflicting facts with the same name and category.
+
+    Facts with the same name at different timestamps are treated as a trend
+    (legitimate clinical data), not a conflict. Only facts with the same
+    timestamp (or no timestamp) are compared.
+    """
+    results: list[Inconsistency] = []
+
+    # Group facts by (name_lower, category)
+    groups: dict[tuple[str, FactCategory], list[ChartFact]] = defaultdict(list)
+    for fact in chart.facts:
+        key = (fact.name.lower().strip(), fact.category)
+        groups[key].append(fact)
+
+    for (_name, _cat), facts in groups.items():
+        if len(facts) < 2:
+            continue
+
+        # Compare pairs, but only if they share a timestamp (or both lack one)
+        for i, fa in enumerate(facts):
+            for fb in facts[i + 1 :]:
+                # If both have distinct timestamps, it's a trend — skip
+                if (
+                    fa.timestamp is not None
+                    and fb.timestamp is not None
+                    and fa.timestamp != fb.timestamp
+                ):
+                    continue
+
+                if fa.value.strip().lower() == fb.value.strip().lower():
+                    results.append(
+                        Inconsistency(
+                            type=InconsistencyType.DUPLICATE_VALUE,
+                            severity=InconsistencySeverity.INFO,
+                            description=(
+                                f"Duplicate {fa.name}: '{fa.value}' appears in both "
+                                f"'{fa.source}' and '{fb.source}'"
+                            ),
+                            fact_a=fa,
+                            fact_b=fb,
+                            recommendation="Verify if this is an intentional duplicate or copy-paste error",
+                        )
+                    )
+                else:
+                    results.append(
+                        Inconsistency(
+                            type=InconsistencyType.CONFLICTING_VALUE,
+                            severity=InconsistencySeverity.WARNING,
+                            description=(
+                                f"Conflicting {fa.name}: '{fa.value}' ({fa.source}) "
+                                f"vs '{fb.value}' ({fb.source})"
+                            ),
+                            fact_a=fa,
+                            fact_b=fb,
+                            recommendation=f"Clarify which {fa.name} value is correct",
+                        )
+                    )
 
     return results

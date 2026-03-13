@@ -11,6 +11,7 @@ from fangbot.chart.consistency import (
     Inconsistency,
     InconsistencySeverity,
     InconsistencyType,
+    check_duplicate_facts,
     check_impossible_vitals,
 )
 from fangbot.chart.models import ChartFact, FactCategory, FactStatus, PatientChart
@@ -282,3 +283,126 @@ class TestImpossibleVitals:
         )
         results = check_impossible_vitals(chart)
         assert len(results) == 2
+
+
+class TestDuplicateFacts:
+    def test_same_name_different_values_same_source(self):
+        """Same fact name with conflicting values from the same source."""
+        fact_a = ChartFact(
+            name="Creatinine",
+            value="1.2 mg/dL",
+            category=FactCategory.LAB,
+            source="BMP 3/7",
+            timestamp=datetime(2026, 3, 7, 8, 0, tzinfo=timezone.utc),
+        )
+        fact_b = ChartFact(
+            name="Creatinine",
+            value="3.8 mg/dL",
+            category=FactCategory.LAB,
+            source="BMP 3/7",
+            timestamp=datetime(2026, 3, 7, 8, 0, tzinfo=timezone.utc),
+        )
+        chart = PatientChart(facts=[fact_a, fact_b], raw_text="Cr 1.2 ... Cr 3.8")
+        results = check_duplicate_facts(chart)
+        assert len(results) == 1
+        assert results[0].type == InconsistencyType.CONFLICTING_VALUE
+        assert results[0].fact_a == fact_a
+        assert results[0].fact_b == fact_b
+
+    def test_same_name_same_value_is_duplicate(self):
+        """Exact duplicate facts (same name, same value)."""
+        fact_a = ChartFact(
+            name="HR",
+            value="88 bpm",
+            category=FactCategory.VITAL,
+            source="Triage vitals",
+        )
+        fact_b = ChartFact(
+            name="HR",
+            value="88 bpm",
+            category=FactCategory.VITAL,
+            source="Nursing note",
+        )
+        chart = PatientChart(facts=[fact_a, fact_b], raw_text="HR 88 ... HR 88")
+        results = check_duplicate_facts(chart)
+        assert len(results) == 1
+        assert results[0].type == InconsistencyType.DUPLICATE_VALUE
+        assert results[0].severity == InconsistencySeverity.INFO
+
+    def test_same_name_different_timestamps_no_flag(self):
+        """Same fact name at different timestamps is a trend, not a conflict."""
+        fact_a = ChartFact(
+            name="Creatinine",
+            value="1.2 mg/dL",
+            category=FactCategory.LAB,
+            source="BMP 3/5",
+            timestamp=datetime(2026, 3, 5, 8, 0, tzinfo=timezone.utc),
+        )
+        fact_b = ChartFact(
+            name="Creatinine",
+            value="1.8 mg/dL",
+            category=FactCategory.LAB,
+            source="BMP 3/7",
+            timestamp=datetime(2026, 3, 7, 8, 0, tzinfo=timezone.utc),
+        )
+        chart = PatientChart(facts=[fact_a, fact_b], raw_text="Cr trend")
+        results = check_duplicate_facts(chart)
+        assert len(results) == 0
+
+    def test_different_names_no_flag(self):
+        chart = PatientChart(
+            facts=[
+                ChartFact(
+                    name="HR", value="88", category=FactCategory.VITAL, source="V"
+                ),
+                ChartFact(
+                    name="RR", value="16", category=FactCategory.VITAL, source="V"
+                ),
+            ],
+            raw_text="HR 88 RR 16",
+        )
+        results = check_duplicate_facts(chart)
+        assert len(results) == 0
+
+    def test_different_categories_no_flag(self):
+        """Same name but different categories should not flag."""
+        chart = PatientChart(
+            facts=[
+                ChartFact(
+                    name="Metformin",
+                    value="500mg",
+                    category=FactCategory.MEDICATION,
+                    source="Med list",
+                ),
+                ChartFact(
+                    name="Metformin",
+                    value="allergy",
+                    category=FactCategory.ALLERGY,
+                    source="Allergy list",
+                ),
+            ],
+            raw_text="Metformin 500mg ... allergy metformin",
+        )
+        results = check_duplicate_facts(chart)
+        assert len(results) == 0
+
+    def test_case_insensitive_name_match(self):
+        chart = PatientChart(
+            facts=[
+                ChartFact(
+                    name="creatinine",
+                    value="1.2",
+                    category=FactCategory.LAB,
+                    source="BMP",
+                ),
+                ChartFact(
+                    name="Creatinine",
+                    value="5.0",
+                    category=FactCategory.LAB,
+                    source="BMP",
+                ),
+            ],
+            raw_text="Cr 1.2 ... Cr 5.0",
+        )
+        results = check_duplicate_facts(chart)
+        assert len(results) == 1
