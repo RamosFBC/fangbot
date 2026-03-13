@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from fangbot.memory.audit import AuditLogger, EventType
 from fangbot.skills.evidence import (
     EvidenceCitation,
     EvidenceConflict,
@@ -289,3 +292,121 @@ class TestEvidenceTracker:
     def test_summary_empty(self):
         summary = self.tracker.summary()
         assert summary == ""
+
+
+class TestEvidenceAuditEvents:
+    """Test audit trail for evidence events."""
+
+    def setup_method(self):
+        import shutil
+
+        log_dir = Path("/tmp/test_evidence_audit")
+        if log_dir.exists():
+            shutil.rmtree(log_dir)
+        self.audit = AuditLogger(log_dir=log_dir)
+        self.audit.start_session("test-evidence")
+
+    def test_guideline_retrieved_event_type_exists(self):
+        assert EventType.GUIDELINE_RETRIEVED == "guideline_retrieved"
+
+    def test_evidence_cited_event_type_exists(self):
+        assert EventType.EVIDENCE_CITED == "evidence_cited"
+
+    def test_evidence_conflict_event_type_exists(self):
+        assert EventType.EVIDENCE_CONFLICT == "evidence_conflict"
+
+    def test_log_guideline_retrieved(self):
+        event = self.audit.log_guideline_retrieved(
+            guideline_id="aha-afib-2023",
+            title="AHA AFib Guidelines",
+            organization="AHA/ACC/HRS",
+            sections=["4.1.1 Stroke Prevention"],
+        )
+        assert event.event_type == EventType.GUIDELINE_RETRIEVED
+        assert event.data["guideline_id"] == "aha-afib-2023"
+        assert event.data["organization"] == "AHA/ACC/HRS"
+
+    def test_log_evidence_cited(self):
+        event = self.audit.log_evidence_cited(
+            doi="10.1161/CIR.001",
+            recommendation="Use DOACs over warfarin",
+            source="guideline",
+            strength="strong",
+        )
+        assert event.event_type == EventType.EVIDENCE_CITED
+        assert event.data["doi"] == "10.1161/CIR.001"
+
+    def test_log_evidence_conflict(self):
+        event = self.audit.log_evidence_conflict(
+            topic="BP target",
+            description="AHA vs ESC differ on target",
+            sources=["AHA", "ESC"],
+        )
+        assert event.event_type == EventType.EVIDENCE_CONFLICT
+        assert event.data["topic"] == "BP target"
+        assert len(event.data["sources"]) == 2
+
+    def test_evidence_events_written_to_file(self):
+        self.audit.log_guideline_retrieved(
+            guideline_id="test-guideline",
+            title="Test Guideline",
+        )
+        events = self.audit.get_events()
+        evidence_events = [e for e in events if e.event_type == EventType.GUIDELINE_RETRIEVED]
+        assert len(evidence_events) == 1
+
+
+# ---------------------------------------------------------------------------
+# System-prompt evidence awareness
+# ---------------------------------------------------------------------------
+
+from fangbot.brain.system_prompt import build_system_prompt
+
+
+class TestEvidenceSystemPrompt:
+    """Test evidence awareness in system prompt."""
+
+    def test_evidence_section_included_when_enabled(self):
+        prompt = build_system_prompt(evidence_retrieval=True)
+        assert "EVIDENCE & GUIDELINE CITATION" in prompt
+        assert "search_guidelines" in prompt
+        assert "retrieve_guideline" in prompt
+
+    def test_evidence_section_excluded_when_disabled(self):
+        prompt = build_system_prompt(evidence_retrieval=False)
+        assert "EVIDENCE & GUIDELINE CITATION" not in prompt
+
+    def test_evidence_section_excluded_by_default(self):
+        prompt = build_system_prompt()
+        assert "EVIDENCE & GUIDELINE CITATION" not in prompt
+
+    def test_evidence_section_mentions_doi_citation(self):
+        prompt = build_system_prompt(evidence_retrieval=True)
+        assert "DOI" in prompt
+
+    def test_evidence_section_mentions_conflict_handling(self):
+        prompt = build_system_prompt(evidence_retrieval=True)
+        assert "conflict" in prompt.lower()
+
+    def test_evidence_section_mentions_source_types(self):
+        prompt = build_system_prompt(evidence_retrieval=True)
+        assert "guideline" in prompt.lower()
+        assert "landmark trial" in prompt.lower()
+
+    def test_evidence_section_mentions_section_specific(self):
+        prompt = build_system_prompt(evidence_retrieval=True)
+        assert "section" in prompt.lower()
+
+    def test_all_sections_can_coexist(self):
+        prompt = build_system_prompt(
+            available_skills=[{"name": "test", "description": "test skill"}],
+            chart_parsing_available=True,
+            uncertainty_calibration=True,
+            available_workflows=[{"name": "summary", "description": "pre-round summary"}],
+            evidence_retrieval=True,
+        )
+        assert "CLINICAL REASONING SKILLS" in prompt
+        assert "CHART GROUNDING" in prompt
+        assert "UNCERTAINTY CALIBRATION" in prompt
+        assert "CLINICAL WORKFLOWS" in prompt
+        assert "EVIDENCE & GUIDELINE CITATION" in prompt
