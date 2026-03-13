@@ -33,6 +33,9 @@ class EventType(str, Enum):
     CONFIDENCE_ASSESSMENT = "confidence_assessment"
     MISSING_DATA_DETECTED = "missing_data_detected"
     CONTRADICTION_DETECTED = "contradiction_detected"
+    WORKFLOW_STARTED = "workflow_started"
+    WORKFLOW_STEP_COMPLETED = "workflow_step_completed"
+    WORKFLOW_COMPLETED = "workflow_completed"
 
 
 class AuditEvent(BaseModel):
