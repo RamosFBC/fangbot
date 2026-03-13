@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class EvidenceSource(str, Enum):
@@ -51,5 +51,5 @@ class EvidenceConflict(BaseModel):
     """A detected conflict between two or more evidence sources."""
 
     topic: str
-    citations: list[EvidenceCitation]
+    citations: list[EvidenceCitation] = Field(min_length=2)
     description: str
