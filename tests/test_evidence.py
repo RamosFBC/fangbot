@@ -410,3 +410,144 @@ class TestEvidenceSystemPrompt:
         assert "UNCERTAINTY CALIBRATION" in prompt
         assert "CLINICAL WORKFLOWS" in prompt
         assert "EVIDENCE & GUIDELINE CITATION" in prompt
+
+
+# ---------------------------------------------------------------------------
+# ReAct integration tests for evidence tracking
+# ---------------------------------------------------------------------------
+
+import pytest
+
+from fangbot.brain.react import ReActLoop
+from fangbot.memory.audit import AuditLogger, EventType
+from fangbot.memory.session import SessionContext
+from fangbot.models import ProviderResponse, ToolCall
+from fangbot.skills.evidence import EvidenceTracker
+
+# Import test fixtures from conftest
+import sys
+sys.path.insert(0, "tests")
+from conftest import MockMCPClient, MockProvider, SAMPLE_TOOLS
+
+
+class TestReActEvidenceIntegration:
+    """Test evidence tracking integration in the ReAct loop."""
+
+    def _make_loop(
+        self,
+        provider: MockProvider,
+        mcp: MockMCPClient,
+        tmp_path,
+        evidence_tracker: EvidenceTracker | None = None,
+    ) -> tuple[ReActLoop, AuditLogger]:
+        audit = AuditLogger(log_dir=tmp_path)
+        audit.start_session("test")
+        loop = ReActLoop(
+            provider=provider,
+            mcp_client=mcp,
+            audit_logger=audit,
+            evidence_tracker=evidence_tracker,
+        )
+        return loop, audit
+
+    @pytest.mark.asyncio
+    async def test_evidence_tracker_receives_guideline_results(self, tmp_path):
+        """When retrieve_guideline is called, the evidence tracker processes the result."""
+        guideline_result = (
+            "Guideline ID: aha-afib-2023\n"
+            "Title: AHA AFib Guidelines\n"
+            "Organization: AHA/ACC/HRS\n"
+            "Year: 2023\n"
+            "Section: 4.1.1 Stroke Prevention\n"
+            "Recommendation: Anticoagulation for CHA2DS2-VASc >= 2\n"
+            "Strength: Strong recommendation (Class I, Level A)\n"
+            "DOI: 10.1161/CIR.0000000000001123"
+        )
+        provider = MockProvider(responses=[
+            ProviderResponse(
+                content="Let me retrieve the guideline.",
+                tool_calls=[ToolCall(id="tc1", name="retrieve_guideline", arguments={"guideline_id": "aha-afib-2023"})],
+            ),
+            ProviderResponse(
+                content="Based on AHA guidelines, anticoagulation is recommended.",
+                tool_calls=[],
+            ),
+        ])
+        mcp = MockMCPClient(tool_results={"retrieve_guideline": guideline_result})
+        tracker = EvidenceTracker()
+        loop, _ = self._make_loop(provider, mcp, tmp_path, evidence_tracker=tracker)
+        session = SessionContext(system_prompt="test")
+
+        await loop.run("What about AFib?", session, SAMPLE_TOOLS)
+
+        assert len(tracker.citations) >= 1
+        assert len(tracker.guidelines) == 1
+        assert tracker.guidelines[0].guideline_id == "aha-afib-2023"
+
+    @pytest.mark.asyncio
+    async def test_evidence_tracker_ignores_calculator_results(self, tmp_path):
+        """Calculator tool results should not be processed by evidence tracker."""
+        provider = MockProvider(responses=[
+            ProviderResponse(
+                content="Calculating score.",
+                tool_calls=[ToolCall(id="tc1", name="execute_clinical_calculator", arguments={"calculator_id": "chadsvasc"})],
+            ),
+            ProviderResponse(content="Score is 3.", tool_calls=[]),
+        ])
+        mcp = MockMCPClient(tool_results={"execute_clinical_calculator": "Score: 3"})
+        tracker = EvidenceTracker()
+        loop, _ = self._make_loop(provider, mcp, tmp_path, evidence_tracker=tracker)
+        session = SessionContext(system_prompt="test")
+
+        await loop.run("Calculate CHA2DS2-VASc", session, SAMPLE_TOOLS)
+
+        assert len(tracker.citations) == 0
+        assert len(tracker.guidelines) == 0
+
+    @pytest.mark.asyncio
+    async def test_react_works_without_evidence_tracker(self, tmp_path):
+        """ReAct loop still works when no evidence tracker is provided."""
+        provider = MockProvider(responses=[
+            ProviderResponse(
+                content="Let me search.",
+                tool_calls=[ToolCall(id="tc1", name="search_guidelines", arguments={"query": "afib"})],
+            ),
+            ProviderResponse(content="Here are the guidelines.", tool_calls=[]),
+        ])
+        mcp = MockMCPClient(tool_results={"search_guidelines": "Found 1 guideline."})
+        loop, _ = self._make_loop(provider, mcp, tmp_path, evidence_tracker=None)
+        session = SessionContext(system_prompt="test")
+
+        result = await loop.run("AFib guidelines?", session, SAMPLE_TOOLS)
+        assert result.synthesis == "Here are the guidelines."
+
+    @pytest.mark.asyncio
+    async def test_evidence_audit_events_logged(self, tmp_path):
+        """Evidence events should appear in the audit trail."""
+        guideline_result = (
+            "Guideline ID: kdigo-2024-ckd\n"
+            "Title: KDIGO CKD Guidelines\n"
+            "Organization: KDIGO\n"
+            "DOI: 10.1038/s41581-024-001\n"
+            "Recommendation: Use CKD-EPI for GFR estimation\n"
+            "Strength: Strong recommendation"
+        )
+        provider = MockProvider(responses=[
+            ProviderResponse(
+                content="Retrieving guideline.",
+                tool_calls=[ToolCall(id="tc1", name="retrieve_guideline", arguments={"guideline_id": "kdigo-2024-ckd"})],
+            ),
+            ProviderResponse(content="Use CKD-EPI per KDIGO.", tool_calls=[]),
+        ])
+        mcp = MockMCPClient(tool_results={"retrieve_guideline": guideline_result})
+        tracker = EvidenceTracker()
+        loop, audit = self._make_loop(provider, mcp, tmp_path, evidence_tracker=tracker)
+        session = SessionContext(system_prompt="test")
+
+        await loop.run("CKD guidelines?", session, SAMPLE_TOOLS)
+
+        events = audit.get_events()
+        guideline_events = [e for e in events if e.event_type == EventType.GUIDELINE_RETRIEVED]
+        evidence_events = [e for e in events if e.event_type == EventType.EVIDENCE_CITED]
+        assert len(guideline_events) >= 1
+        assert len(evidence_events) >= 1
