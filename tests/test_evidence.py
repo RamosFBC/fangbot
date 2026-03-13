@@ -551,3 +551,95 @@ class TestReActEvidenceIntegration:
         evidence_events = [e for e in events if e.event_type == EventType.EVIDENCE_CITED]
         assert len(guideline_events) >= 1
         assert len(evidence_events) >= 1
+
+
+# ---------------------------------------------------------------------------
+# End-to-end integration test: search → retrieve → extract → track → audit
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_full_evidence_flow(tmp_path):
+    """End-to-end: search → retrieve → extract → track → audit."""
+    search_result = (
+        "Found 2 guidelines:\n"
+        "1. [aha-afib-2023] AHA/ACC/HRS 2023 AFib Guidelines — DOI: 10.1161/CIR.001\n"
+        "2. [esc-afib-2020] ESC 2020 AFib Guidelines — DOI: 10.1093/eurheartj/ehaa612"
+    )
+    retrieve_result = (
+        "Guideline ID: aha-afib-2023\n"
+        "Title: AHA/ACC/HRS 2023 Guideline for Management of AF\n"
+        "Organization: AHA/ACC/HRS\n"
+        "Year: 2023\n"
+        "Section: 4.1.1 Stroke Prevention\n"
+        "Recommendation: Oral anticoagulation is recommended for CHA2DS2-VASc >= 2 in men\n"
+        "Strength: Strong recommendation (Class I, Level A)\n"
+        "DOI: 10.1161/CIR.0000000000001123"
+    )
+
+    provider = MockProvider(responses=[
+        # Step 1: LLM searches for guidelines
+        ProviderResponse(
+            content="Searching for AFib guidelines.",
+            tool_calls=[ToolCall(id="tc1", name="search_guidelines", arguments={"query": "atrial fibrillation anticoagulation"})],
+        ),
+        # Step 2: LLM retrieves specific guideline
+        ProviderResponse(
+            content="Retrieving AHA guideline.",
+            tool_calls=[ToolCall(id="tc2", name="retrieve_guideline", arguments={"guideline_id": "aha-afib-2023"})],
+        ),
+        # Step 3: LLM also calls calculator
+        ProviderResponse(
+            content="Now calculating CHA2DS2-VASc.",
+            tool_calls=[ToolCall(id="tc3", name="execute_clinical_calculator", arguments={"calculator_id": "chadsvasc", "parameters": {"age": 72}})],
+        ),
+        # Step 4: Final synthesis
+        ProviderResponse(
+            content="Based on AHA/ACC/HRS 2023 Guidelines (DOI: 10.1161/CIR.0000000000001123), "
+                    "anticoagulation is recommended for CHA2DS2-VASc >= 2. Patient scores 3.",
+            tool_calls=[],
+        ),
+    ])
+
+    mcp = MockMCPClient(tool_results={
+        "search_guidelines": search_result,
+        "retrieve_guideline": retrieve_result,
+        "execute_clinical_calculator": "CHA2DS2-VASc Score: 3. Risk: High.",
+    })
+
+    tracker = EvidenceTracker()
+    audit = AuditLogger(log_dir=tmp_path)
+    audit.start_session("e2e-evidence")
+
+    loop = ReActLoop(
+        provider=provider,
+        mcp_client=mcp,
+        audit_logger=audit,
+        evidence_tracker=tracker,
+    )
+    session = SessionContext(system_prompt="test")
+
+    result = await loop.run(
+        "Patient has AFib, age 72, male, HTN. What about anticoagulation?",
+        session,
+        SAMPLE_TOOLS,
+    )
+
+    # Verify evidence was tracked
+    assert len(tracker.guidelines) >= 1
+    assert any(g.guideline_id == "aha-afib-2023" for g in tracker.guidelines)
+    assert len(tracker.citations) >= 1
+    assert any(c.doi == "10.1161/CIR.0000000000001123" for c in tracker.citations)
+
+    # Verify audit trail has evidence events
+    events = audit.get_events()
+    event_types = [e.event_type for e in events]
+    assert EventType.GUIDELINE_RETRIEVED in event_types
+    assert EventType.EVIDENCE_CITED in event_types
+
+    # Verify synthesis mentions the guideline
+    assert "10.1161/CIR.0000000000001123" in result.synthesis
+
+    # Verify summary
+    summary = tracker.summary()
+    assert "AHA" in summary
