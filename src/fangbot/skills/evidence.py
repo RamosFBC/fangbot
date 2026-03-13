@@ -221,6 +221,12 @@ class EvidenceTracker:
         return len(self._conflicts) > 0
 
     def add_citation(self, citation: EvidenceCitation) -> None:
+        """Add a citation, deduplicating by DOI or PMID when available."""
+        for existing in self._citations:
+            if citation.doi and existing.doi == citation.doi:
+                return
+            if citation.pmid and existing.pmid == citation.pmid:
+                return
         self._citations.append(citation)
 
     def add_guideline(self, ref: GuidelineReference) -> None:
@@ -290,7 +296,7 @@ class EvidenceTracker:
                 parts.append(line)
 
         if self._conflicts:
-            parts.append("\n⚠ Evidence conflicts detected:")
+            parts.append("\nWARNING — Evidence conflicts detected:")
             for conf in self._conflicts:
                 parts.append(f"- {conf.topic}: {conf.description}")
 
