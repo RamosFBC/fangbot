@@ -159,3 +159,96 @@ class TestParseUncertaintyAssessment:
         )
         stripped = strip_uncertainty_block(text)
         assert stripped == "Result here."
+
+
+class TestUncertaintyEdgeCases:
+    def test_extra_whitespace_in_block(self) -> None:
+        text = (
+            "---\n"
+            "Confidence:   HIGH  \n"
+            "Reasoning:   All data present  \n"
+            "Missing data:   None  \n"
+            "Contradictions:   None  \n"
+            "---"
+        )
+        result = parse_uncertainty_assessment(text)
+        assert result is not None
+        assert result.confidence == ConfidenceLevel.HIGH
+        assert result.reasoning == "All data present"
+
+    def test_lowercase_confidence_level(self) -> None:
+        text = (
+            "---\n"
+            "Confidence: moderate\n"
+            "Reasoning: Some inference needed\n"
+            "Missing data: None\n"
+            "Contradictions: None\n"
+            "---"
+        )
+        result = parse_uncertainty_assessment(text)
+        assert result is not None
+        assert result.confidence == ConfidenceLevel.MODERATE
+
+    def test_invalid_confidence_level_returns_none(self) -> None:
+        text = (
+            "---\n"
+            "Confidence: UNKNOWN_LEVEL\n"
+            "Reasoning: Bad level\n"
+            "Missing data: None\n"
+            "Contradictions: None\n"
+            "---"
+        )
+        result = parse_uncertainty_assessment(text)
+        assert result is None
+
+    def test_multiple_semicolon_items_with_whitespace(self) -> None:
+        text = (
+            "---\n"
+            "Confidence: LOW\n"
+            "Reasoning: Gaps\n"
+            "Missing data:  Creatinine ;  Weight ;  Height \n"
+            "Contradictions: BP conflict ; Age conflict \n"
+            "---"
+        )
+        result = parse_uncertainty_assessment(text)
+        assert result is not None
+        assert result.missing_data == ["Creatinine", "Weight", "Height"]
+        assert result.contradictions == ["BP conflict", "Age conflict"]
+
+    def test_multiline_synthesis_preserved_after_strip(self) -> None:
+        text = (
+            "Line one.\n"
+            "Line two.\n"
+            "Line three.\n"
+            "---\n"
+            "Confidence: HIGH\n"
+            "Reasoning: OK\n"
+            "Missing data: None\n"
+            "Contradictions: None\n"
+            "---"
+        )
+        stripped = strip_uncertainty_block(text)
+        assert "Line one." in stripped
+        assert "Line two." in stripped
+        assert "Line three." in stripped
+        assert "Confidence" not in stripped
+
+    def test_numeric_values_ordering(self) -> None:
+        assert ConfidenceLevel.HIGH.numeric_value > ConfidenceLevel.MODERATE.numeric_value
+        assert ConfidenceLevel.MODERATE.numeric_value > ConfidenceLevel.LOW.numeric_value
+        assert ConfidenceLevel.LOW.numeric_value > ConfidenceLevel.INSUFFICIENT_DATA.numeric_value
+
+    def test_serialization_round_trip(self) -> None:
+        assessment = UncertaintyAssessment(
+            confidence=ConfidenceLevel.MODERATE,
+            reasoning="Age estimated from context",
+            missing_data=["Exact DOB", "Smoking status"],
+            contradictions=["BP 120/80 vs 140/90"],
+        )
+        json_str = assessment.model_dump_json()
+        restored = UncertaintyAssessment.model_validate_json(json_str)
+        assert restored.confidence == ConfidenceLevel.MODERATE
+        assert restored.reasoning == "Age estimated from context"
+        assert restored.missing_data == ["Exact DOB", "Smoking status"]
+        assert restored.contradictions == ["BP 120/80 vs 140/90"]
+        assert restored.escalation_recommended is False
