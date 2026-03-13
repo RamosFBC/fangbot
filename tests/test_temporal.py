@@ -12,6 +12,7 @@ from fangbot.chart.temporal import (
     TemporalFact,
     TimelineEntry,
     PatientTimeline,
+    classify_facts,
 )
 
 
@@ -100,3 +101,103 @@ class TestPatientTimeline:
         )
         assert len(timeline.entries) == 2
         assert timeline.summary == "24h timeline with 2 events"
+
+
+class TestClassifyFacts:
+    def test_new_finding_single_occurrence(self):
+        """A diagnosis appearing only once with ACTIVE status is NEW."""
+        facts = [
+            _fact("Pneumonia", "right lower lobe", FactCategory.DIAGNOSIS, 0),
+        ]
+        chart = _chart_with_facts(facts)
+        classified = classify_facts(chart)
+
+        assert len(classified) == 1
+        assert classified[0].classification == TemporalClassification.NEW
+        assert classified[0].fact.name == "Pneumonia"
+
+    def test_chronic_finding_historical_status(self):
+        """A fact with HISTORICAL status is CHRONIC."""
+        facts = [
+            _fact(
+                "Hypertension", "controlled", FactCategory.DIAGNOSIS, 0,
+                status=FactStatus.HISTORICAL,
+            ),
+        ]
+        chart = _chart_with_facts(facts)
+        classified = classify_facts(chart)
+
+        assert len(classified) == 1
+        assert classified[0].classification == TemporalClassification.CHRONIC
+
+    def test_resolved_finding(self):
+        """A fact with RESOLVED status maps to RESOLVED classification."""
+        facts = [
+            _fact(
+                "UTI", "resolved", FactCategory.DIAGNOSIS, 0,
+                status=FactStatus.RESOLVED,
+            ),
+        ]
+        chart = _chart_with_facts(facts)
+        classified = classify_facts(chart)
+
+        assert len(classified) == 1
+        assert classified[0].classification == TemporalClassification.RESOLVED
+
+    def test_worsening_numeric_increase_for_lab(self):
+        """Rising lab values with multiple readings indicate WORSENING."""
+        facts = [
+            _fact("Creatinine", "1.2 mg/dL", FactCategory.LAB, 0),
+            _fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 24),
+            _fact("Creatinine", "2.4 mg/dL", FactCategory.LAB, 48),
+        ]
+        chart = _chart_with_facts(facts)
+        classified = classify_facts(chart)
+
+        # The latest fact (2.4) should be classified as WORSENING
+        latest = [c for c in classified if c.fact.value == "2.4 mg/dL"]
+        assert len(latest) == 1
+        assert latest[0].classification == TemporalClassification.WORSENING
+
+    def test_improving_numeric_decrease_for_lab(self):
+        """Falling lab values (where high is bad) indicate IMPROVING."""
+        facts = [
+            _fact("Creatinine", "2.4 mg/dL", FactCategory.LAB, 0),
+            _fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 24),
+            _fact("Creatinine", "1.2 mg/dL", FactCategory.LAB, 48),
+        ]
+        chart = _chart_with_facts(facts)
+        classified = classify_facts(chart)
+
+        latest = [c for c in classified if c.fact.value == "1.2 mg/dL"]
+        assert len(latest) == 1
+        assert latest[0].classification == TemporalClassification.IMPROVING
+
+    def test_mixed_categories(self):
+        """Facts from different categories are all classified."""
+        facts = [
+            _fact("Pneumonia", "bilateral", FactCategory.DIAGNOSIS, 0),
+            _fact("Heart Rate", "110 bpm", FactCategory.VITAL, 0),
+            _fact("Vancomycin", "1g IV q12h", FactCategory.MEDICATION, 0),
+        ]
+        chart = _chart_with_facts(facts)
+        classified = classify_facts(chart)
+
+        assert len(classified) == 3
+        names = {c.fact.name for c in classified}
+        assert names == {"Pneumonia", "Heart Rate", "Vancomycin"}
+
+    def test_facts_without_timestamps_still_classified(self):
+        """Facts without timestamps are classified based on status alone."""
+        fact = ChartFact(
+            name="Diabetes",
+            value="Type 2",
+            category=FactCategory.DIAGNOSIS,
+            source="PMH",
+            status=FactStatus.HISTORICAL,
+        )
+        chart = _chart_with_facts([fact])
+        classified = classify_facts(chart)
+
+        assert len(classified) == 1
+        assert classified[0].classification == TemporalClassification.CHRONIC

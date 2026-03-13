@@ -7,7 +7,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from fangbot.chart.models import ChartFact, FactCategory, PatientChart
+from fangbot.chart.models import ChartFact, FactCategory, FactStatus, PatientChart
 
 
 class TemporalClassification(str, Enum):
@@ -43,3 +43,125 @@ class PatientTimeline(BaseModel):
     start: datetime | None = None
     end: datetime | None = None
     summary: str = ""
+
+
+import re
+from collections import defaultdict
+
+
+def _extract_numeric(value: str) -> float | None:
+    """Extract the first numeric value from a string."""
+    match = re.search(r"[-+]?\d*\.?\d+", value)
+    if match:
+        try:
+            return float(match.group())
+        except ValueError:
+            return None
+    return None
+
+
+def classify_facts(chart: PatientChart) -> list[TemporalFact]:
+    """Classify each chart fact with a temporal label.
+
+    Classification rules:
+    1. RESOLVED status -> RESOLVED
+    2. HISTORICAL status -> CHRONIC
+    3. For numeric series (labs/vitals) with 2+ timestamped values:
+       - Rising values -> WORSENING (latest), earlier values -> NEW
+       - Falling values -> IMPROVING (latest), earlier values -> NEW
+    4. Single occurrence with ACTIVE/None status -> NEW
+
+    Args:
+        chart: Patient chart with extracted facts.
+
+    Returns:
+        List of TemporalFact, one per input fact, preserving order.
+    """
+    # Pre-compute trend info for numeric series
+    numeric_series: dict[str, list[tuple[float, datetime, int]]] = defaultdict(list)
+    for idx, fact in enumerate(chart.facts):
+        if fact.timestamp is None:
+            continue
+        if fact.category not in (FactCategory.LAB, FactCategory.VITAL):
+            continue
+        num = _extract_numeric(fact.value)
+        if num is not None:
+            numeric_series[fact.name].append((num, fact.timestamp, idx))
+
+    # Sort each series by timestamp
+    for name in numeric_series:
+        numeric_series[name].sort(key=lambda x: x[1])
+
+    # Determine direction for each series
+    series_direction: dict[str, str] = {}
+    for name, points in numeric_series.items():
+        if len(points) < 2:
+            continue
+        first_val = points[0][0]
+        last_val = points[-1][0]
+        diff = last_val - first_val
+        mean = (first_val + last_val) / 2
+        if abs(mean) < 1e-12:
+            continue
+        ratio = abs(diff) / abs(mean)
+        if ratio < 0.02:
+            series_direction[name] = "stable"
+        elif diff > 0:
+            series_direction[name] = "rising"
+        else:
+            series_direction[name] = "falling"
+
+    # Track which index is the latest in each series
+    latest_idx: dict[str, int] = {}
+    for name, points in numeric_series.items():
+        if len(points) >= 2:
+            latest_idx[name] = points[-1][2]
+
+    results: list[TemporalFact] = []
+    for idx, fact in enumerate(chart.facts):
+        classification, rationale = _classify_single(
+            fact, idx, numeric_series, series_direction, latest_idx
+        )
+        results.append(
+            TemporalFact(fact=fact, classification=classification, rationale=rationale)
+        )
+
+    return results
+
+
+def _classify_single(
+    fact: ChartFact,
+    idx: int,
+    numeric_series: dict[str, list[tuple[float, datetime, int]]],
+    series_direction: dict[str, str],
+    latest_idx: dict[str, int],
+) -> tuple[TemporalClassification, str]:
+    """Classify a single fact."""
+    # Rule 1: explicit resolved status
+    if fact.status == FactStatus.RESOLVED:
+        return TemporalClassification.RESOLVED, "Fact has RESOLVED status"
+
+    # Rule 2: explicit historical status
+    if fact.status == FactStatus.HISTORICAL:
+        return TemporalClassification.CHRONIC, "Fact has HISTORICAL status (pre-existing)"
+
+    # Rule 3: numeric trend for latest value in a series
+    name = fact.name
+    if name in series_direction and idx == latest_idx.get(name):
+        direction = series_direction[name]
+        series = numeric_series[name]
+        first_val = series[0][0]
+        last_val = series[-1][0]
+        if direction == "rising":
+            return (
+                TemporalClassification.WORSENING,
+                f"{name} rising: {first_val:g} -> {last_val:g}",
+            )
+        elif direction == "falling":
+            return (
+                TemporalClassification.IMPROVING,
+                f"{name} falling: {first_val:g} -> {last_val:g}",
+            )
+
+    # Rule 4: default to NEW
+    return TemporalClassification.NEW, "First or single occurrence, active finding"
