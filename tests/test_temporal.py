@@ -13,6 +13,7 @@ from fangbot.chart.temporal import (
     TimelineEntry,
     PatientTimeline,
     classify_facts,
+    build_timeline,
 )
 
 
@@ -297,3 +298,91 @@ class TestSegmentEpisodes:
         ep = episodes[0]
         assert ep.start == BASE_TIME
         assert ep.end == BASE_TIME + timedelta(hours=4)
+
+
+class TestBuildTimeline:
+    def test_basic_timeline(self):
+        """Build a timeline from a chart with multiple timestamped facts."""
+        facts = [
+            _fact("Creatinine", "1.2 mg/dL", FactCategory.LAB, 0),
+            _fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 24),
+            _fact("Pneumonia", "RLL infiltrate", FactCategory.DIAGNOSIS, 2),
+            _fact("Heart Rate", "110 bpm", FactCategory.VITAL, 0),
+        ]
+        chart = _chart_with_facts(facts)
+        timeline = build_timeline(chart)
+
+        assert len(timeline.entries) == 4
+        assert timeline.start == BASE_TIME
+        assert timeline.end == BASE_TIME + timedelta(hours=24)
+        # Entries should be sorted by timestamp
+        timestamps = [e.timestamp for e in timeline.entries]
+        assert timestamps == sorted(timestamps)
+
+    def test_timeline_entries_have_descriptions(self):
+        """Each entry has a human-readable description."""
+        facts = [
+            _fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 0),
+        ]
+        chart = _chart_with_facts(facts)
+        timeline = build_timeline(chart)
+
+        assert len(timeline.entries) == 1
+        entry = timeline.entries[0]
+        assert "Creatinine" in entry.description
+        assert "1.8" in entry.description
+        assert entry.fact_name == "Creatinine"
+        assert entry.category == FactCategory.LAB
+
+    def test_timeline_includes_temporal_classification(self):
+        """Timeline entries include temporal classification when available."""
+        facts = [
+            _fact("Creatinine", "1.2 mg/dL", FactCategory.LAB, 0),
+            _fact("Creatinine", "2.4 mg/dL", FactCategory.LAB, 24),
+        ]
+        chart = _chart_with_facts(facts)
+        timeline = build_timeline(chart)
+
+        # The latest creatinine entry should be marked WORSENING
+        latest = [e for e in timeline.entries if e.timestamp == BASE_TIME + timedelta(hours=24)]
+        assert len(latest) == 1
+        assert latest[0].classification == TemporalClassification.WORSENING
+
+    def test_timeline_excludes_untimestamped_facts(self):
+        """Facts without timestamps are not included in the timeline."""
+        facts = [
+            ChartFact(
+                name="Diabetes",
+                value="Type 2",
+                category=FactCategory.DIAGNOSIS,
+                source="PMH",
+                status=FactStatus.HISTORICAL,
+            ),
+            _fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 0),
+        ]
+        chart = _chart_with_facts(facts)
+        timeline = build_timeline(chart)
+
+        assert len(timeline.entries) == 1
+        assert timeline.entries[0].fact_name == "Creatinine"
+
+    def test_empty_chart_empty_timeline(self):
+        """Empty chart produces empty timeline."""
+        chart = _chart_with_facts([])
+        timeline = build_timeline(chart)
+
+        assert len(timeline.entries) == 0
+        assert timeline.start is None
+        assert timeline.end is None
+
+    def test_timeline_summary_includes_span(self):
+        """Timeline summary mentions the time span."""
+        facts = [
+            _fact("Creatinine", "1.2 mg/dL", FactCategory.LAB, 0),
+            _fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 48),
+        ]
+        chart = _chart_with_facts(facts)
+        timeline = build_timeline(chart)
+
+        assert "48" in timeline.summary or "2" in timeline.summary  # hours or days
+        assert "2 events" in timeline.summary or "2 entries" in timeline.summary

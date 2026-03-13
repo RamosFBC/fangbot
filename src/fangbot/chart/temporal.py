@@ -165,3 +165,59 @@ def _classify_single(
 
     # Rule 4: default to NEW
     return TemporalClassification.NEW, "First or single occurrence, active finding"
+
+
+def build_timeline(chart: PatientChart) -> PatientTimeline:
+    """Build a problem-oriented timeline from chart facts.
+
+    Combines temporal classification with chronological ordering.
+    Only includes facts that have timestamps.
+
+    Args:
+        chart: Patient chart with extracted facts.
+
+    Returns:
+        A PatientTimeline with entries sorted chronologically.
+    """
+    # Get temporal classifications for all facts
+    classified = classify_facts(chart)
+
+    # Build a lookup: fact index -> classification
+    classification_map: dict[int, TemporalClassification] = {}
+    for idx, tf in enumerate(classified):
+        classification_map[idx] = tf.classification
+
+    # Build timeline entries for timestamped facts only
+    entries: list[TimelineEntry] = []
+    for idx, fact in enumerate(chart.facts):
+        if fact.timestamp is None:
+            continue
+        entries.append(
+            TimelineEntry(
+                timestamp=fact.timestamp,
+                description=f"{fact.name}: {fact.value}",
+                category=fact.category,
+                fact_name=fact.name,
+                classification=classification_map.get(idx),
+            )
+        )
+
+    # Sort by timestamp
+    entries.sort(key=lambda e: e.timestamp)
+
+    if not entries:
+        return PatientTimeline(entries=[], summary="No timestamped events")
+
+    start = entries[0].timestamp
+    end = entries[-1].timestamp
+    span_hours = (end - start).total_seconds() / 3600
+    n = len(entries)
+
+    if span_hours >= 48:
+        span_str = f"{span_hours / 24:.0f} days"
+    else:
+        span_str = f"{span_hours:.0f}h"
+
+    summary = f"{span_str} timeline with {n} entries"
+
+    return PatientTimeline(entries=entries, start=start, end=end, summary=summary)
