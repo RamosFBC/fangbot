@@ -506,3 +506,96 @@ class TestAuditEventTypes:
         assert EventType.TEMPORAL_CLASSIFICATION == "temporal_classification"
         assert EventType.EPISODE_SEGMENTATION == "episode_segmentation"
         assert EventType.TIMELINE_GENERATION == "timeline_generation"
+
+
+class TestClinicalScenario:
+    """End-to-end test with a realistic multi-day clinical chart."""
+
+    @pytest.fixture
+    def aki_chart(self) -> PatientChart:
+        """Simulate a 3-day acute kidney injury progression."""
+        facts = [
+            # Day 1 — admission
+            _fact("Creatinine", "1.2 mg/dL", FactCategory.LAB, 0),
+            _fact("BUN", "18 mg/dL", FactCategory.LAB, 0),
+            _fact("Heart Rate", "82 bpm", FactCategory.VITAL, 0),
+            _fact("Blood Pressure", "130/80 mmHg", FactCategory.VITAL, 0),
+            _fact("Hypertension", "essential", FactCategory.DIAGNOSIS, 0,
+                  status=FactStatus.HISTORICAL),
+            _fact("Metformin", "500mg BID", FactCategory.MEDICATION, 0),
+            # Day 2 — worsening
+            _fact("Creatinine", "1.8 mg/dL", FactCategory.LAB, 24),
+            _fact("BUN", "28 mg/dL", FactCategory.LAB, 24),
+            _fact("Heart Rate", "95 bpm", FactCategory.VITAL, 24),
+            _fact("AKI", "stage 1", FactCategory.DIAGNOSIS, 24),
+            # Day 3 — further worsening
+            _fact("Creatinine", "2.4 mg/dL", FactCategory.LAB, 48),
+            _fact("BUN", "42 mg/dL", FactCategory.LAB, 48),
+            _fact("Heart Rate", "105 bpm", FactCategory.VITAL, 48),
+            _fact("Potassium", "5.8 mEq/L", FactCategory.LAB, 48),
+        ]
+        return _chart_with_facts(facts)
+
+    def test_trends_detected(self, aki_chart: PatientChart):
+        """Creatinine, BUN, and HR should all show rising trends."""
+        from fangbot.chart.trends import detect_trends, TrendDirection
+
+        trends = detect_trends(aki_chart)
+        trend_map = {t.fact_name: t for t in trends}
+
+        assert "Creatinine" in trend_map
+        assert trend_map["Creatinine"].direction == TrendDirection.RISING
+        assert trend_map["Creatinine"].points[0].value == pytest.approx(1.2)
+        assert trend_map["Creatinine"].points[-1].value == pytest.approx(2.4)
+
+        assert "BUN" in trend_map
+        assert trend_map["BUN"].direction == TrendDirection.RISING
+
+        assert "Heart Rate" in trend_map
+        assert trend_map["Heart Rate"].direction == TrendDirection.RISING
+
+    def test_temporal_classification(self, aki_chart: PatientChart):
+        """Hypertension should be CHRONIC, AKI should be NEW, latest Cr WORSENING."""
+        classified = classify_facts(aki_chart)
+        class_map = {(c.fact.name, c.fact.value): c for c in classified}
+
+        assert class_map[("Hypertension", "essential")].classification == \
+            TemporalClassification.CHRONIC
+        assert class_map[("AKI", "stage 1")].classification == \
+            TemporalClassification.NEW
+        assert class_map[("Creatinine", "2.4 mg/dL")].classification == \
+            TemporalClassification.WORSENING
+
+    def test_episode_segmentation(self, aki_chart: PatientChart):
+        """Should produce at least 3 lab episodes (one per day)."""
+        from fangbot.chart.episodes import segment_episodes
+
+        episodes = segment_episodes(aki_chart, window_hours=6)
+        lab_episodes = [ep for ep in episodes if ep.category == FactCategory.LAB]
+
+        # With 6h window, day 1, day 2, day 3 labs are separate episodes
+        assert len(lab_episodes) == 3
+
+    def test_baseline_comparison(self, aki_chart: PatientChart):
+        """Creatinine should show 100% increase from baseline."""
+        comparisons = compare_to_baseline(aki_chart)
+        cr_comp = [c for c in comparisons if c.fact_name == "Creatinine"]
+
+        assert len(cr_comp) == 1
+        assert cr_comp[0].baseline_value == pytest.approx(1.2)
+        assert cr_comp[0].current_value == pytest.approx(2.4)
+        assert cr_comp[0].change_percent == pytest.approx(100.0)
+
+    def test_timeline_generation(self, aki_chart: PatientChart):
+        """Timeline should have all timestamped entries in chronological order."""
+        timeline = build_timeline(aki_chart)
+
+        # 14 facts, all timestamped
+        assert len(timeline.entries) == 14
+        timestamps = [e.timestamp for e in timeline.entries]
+        assert timestamps == sorted(timestamps)
+
+        # Verify span is ~48h
+        assert timeline.start == BASE_TIME
+        assert timeline.end == BASE_TIME + timedelta(hours=48)
+        assert "48" in timeline.summary or "2 day" in timeline.summary
