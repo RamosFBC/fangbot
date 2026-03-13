@@ -82,9 +82,37 @@ You have access to the `parse_patient_chart` tool for structured extraction from
 """
 
 
+_UNCERTAINTY_CALIBRATION_SECTION = """
+## UNCERTAINTY CALIBRATION
+
+After every clinical synthesis, append an uncertainty assessment block using EXACTLY this format:
+
+---
+Confidence: <HIGH | MODERATE | LOW | INSUFFICIENT_DATA>
+Reasoning: <one-sentence justification for the confidence level>
+Missing data: <semicolon-separated list, or "None">
+Contradictions: <semicolon-separated list, or "None">
+---
+
+**Confidence level criteria:**
+
+- **HIGH** — All required parameters are present, unambiguous, and validated by tool results.
+- **MODERATE** — Most parameters are present but one or more are inferred, estimated, or from a secondary source.
+- **LOW** — Key parameters are missing, conflicting, or the clinical context introduces significant ambiguity.
+- **INSUFFICIENT_DATA** — Critical data is absent and no reasonable inference can be made. Escalation to a clinician is required.
+
+**Rules:**
+- Always include the block, even when confidence is HIGH.
+- List every missing datum individually, separated by semicolons.
+- List every contradiction individually, separated by semicolons.
+- If there are no missing data or contradictions, write "None".
+"""
+
+
 def build_system_prompt(
     available_skills: list[dict[str, str]] | None = None,
     chart_parsing_available: bool = False,
+    uncertainty_calibration: bool = False,
 ) -> str:
     """Build the full system prompt, optionally including skill and chart awareness."""
     prompt = CLINICAL_SYSTEM_PROMPT
@@ -95,5 +123,8 @@ def build_system_prompt(
 
     if chart_parsing_available:
         prompt += _CHART_AWARENESS_SECTION
+
+    if uncertainty_calibration:
+        prompt += _UNCERTAINTY_CALIBRATION_SECTION
 
     return prompt
