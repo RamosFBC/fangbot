@@ -36,6 +36,9 @@ class EventType(str, Enum):
     WORKFLOW_STARTED = "workflow_started"
     WORKFLOW_STEP_COMPLETED = "workflow_step_completed"
     WORKFLOW_COMPLETED = "workflow_completed"
+    GUIDELINE_RETRIEVED = "guideline_retrieved"
+    EVIDENCE_CITED = "evidence_cited"
+    EVIDENCE_CONFLICT = "evidence_conflict"
 
 
 class AuditEvent(BaseModel):
@@ -124,6 +127,57 @@ class AuditLogger:
             self.log(EventType.CONTRADICTION_DETECTED, {"item": item})
 
         return event
+
+    def log_guideline_retrieved(
+        self,
+        guideline_id: str,
+        title: str,
+        organization: str | None = None,
+        sections: list[str] | None = None,
+    ) -> AuditEvent:
+        return self.log(
+            EventType.GUIDELINE_RETRIEVED,
+            {
+                "guideline_id": guideline_id,
+                "title": title,
+                "organization": organization,
+                "sections": sections or [],
+            },
+        )
+
+    def log_evidence_cited(
+        self,
+        doi: str | None = None,
+        pmid: str | None = None,
+        recommendation: str = "",
+        source: str = "",
+        strength: str | None = None,
+    ) -> AuditEvent:
+        return self.log(
+            EventType.EVIDENCE_CITED,
+            {
+                "doi": doi,
+                "pmid": pmid,
+                "recommendation": recommendation,
+                "source": source,
+                "strength": strength,
+            },
+        )
+
+    def log_evidence_conflict(
+        self,
+        topic: str,
+        description: str,
+        sources: list[str] | None = None,
+    ) -> AuditEvent:
+        return self.log(
+            EventType.EVIDENCE_CONFLICT,
+            {
+                "topic": topic,
+                "description": description,
+                "sources": sources or [],
+            },
+        )
 
     def get_events(self) -> list[AuditEvent]:
         """Read all events from the current session's audit file."""

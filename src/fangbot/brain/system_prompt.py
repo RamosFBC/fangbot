@@ -132,11 +132,56 @@ an editable draft with provenance tracking.
 """
 
 
+_EVIDENCE_AWARENESS_SECTION = """
+## EVIDENCE & GUIDELINE CITATION
+
+You have access to evidence retrieval tools for clinical decision support.
+
+**Tools:**
+- `search_guidelines` — Search for clinical guidelines by topic. Returns guideline IDs, titles, and DOIs.
+- `retrieve_guideline` — Retrieve a specific guideline section by ID. Returns detailed recommendations with evidence grades.
+
+**How to use guidelines:**
+
+1. **Search first:** Use `search_guidelines` with a specific clinical question (e.g., "anticoagulation atrial fibrillation" not just "afib").
+2. **Retrieve specific sections:** Use `retrieve_guideline` with the guideline ID and request the relevant section — not the entire document.
+3. **Cite precisely:** Include the DOI, guideline organization, and specific section in your response.
+4. **Explain applicability:** State WHY this guideline applies to THIS patient's situation.
+
+**Citation format in your responses:**
+
+For each evidence-based recommendation, include:
+- The specific recommendation text
+- Source organization and year (e.g., "AHA/ACC/HRS 2023")
+- DOI or PMID when available
+- Strength of recommendation if provided (Class I/II/III, Level A/B/C)
+
+**Source type differentiation:**
+- **Clinical guideline** — Consensus-based practice recommendations from professional societies
+- **Landmark trial** — Pivotal RCTs that established standard of care (e.g., SPRINT, RE-LY)
+- **Hospital protocol** — Institution-specific adaptations of guidelines
+
+**Conflict handling:**
+When multiple guidelines address the same topic with different recommendations:
+1. Present BOTH recommendations with their sources
+2. Note the discrepancy explicitly — never silently pick one
+3. Identify which is more recent or more applicable to the patient's context
+4. If uncertain which applies, state that and recommend specialist input
+
+**Do NOT:**
+- Cite guidelines from memory without using the retrieval tools
+- Reference a guideline without specifying the section
+- Ignore conflicting evidence from different sources
+- Present a guideline recommendation without explaining why it applies to the current patient
+"""
+
+
 def build_system_prompt(
     available_skills: list[dict[str, str]] | None = None,
     chart_parsing_available: bool = False,
     uncertainty_calibration: bool = False,
     available_workflows: list[dict[str, str]] | None = None,
+    evidence_retrieval: bool = False,
 ) -> str:
     """Build the full system prompt, optionally including skill and chart awareness."""
     prompt = CLINICAL_SYSTEM_PROMPT
@@ -156,5 +201,8 @@ def build_system_prompt(
             f"- **{w['name']}**: {w['description']}" for w in available_workflows
         )
         prompt += _WORKFLOW_AWARENESS_SECTION.format(workflow_list=wf_lines)
+
+    if evidence_retrieval:
+        prompt += _EVIDENCE_AWARENESS_SECTION
 
     return prompt

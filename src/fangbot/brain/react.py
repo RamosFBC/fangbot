@@ -16,6 +16,7 @@ from fangbot.brain.uncertainty import (
 from fangbot.memory.audit import AuditLogger, EventType
 from fangbot.memory.session import SessionContext
 from fangbot.models import ToolCall, ToolDefinition
+from fangbot.skills.evidence import EvidenceTracker
 from fangbot.skills.mcp_client import MCPToolError, OpenMedicineMCPClient
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ class ReActLoop:
         clinical_skill_loader: object | None = None,
         chart_parser: object | None = None,
         workflow_engine: object | None = None,
+        evidence_tracker: EvidenceTracker | None = None,
     ):
         self._provider = provider
         self._mcp = mcp_client
@@ -57,6 +59,7 @@ class ReActLoop:
         self._skill_loader = clinical_skill_loader
         self._chart_parser = chart_parser
         self._workflow_engine = workflow_engine
+        self._evidence_tracker = evidence_tracker
 
     async def run(
         self,
@@ -154,6 +157,35 @@ class ReActLoop:
             escalation_recommended=assessment.escalation_recommended,
         )
 
+    def _process_evidence(self, tool_name: str, result_text: str) -> None:
+        """Extract and log evidence from guideline tool results."""
+        if self._evidence_tracker is None:
+            return
+
+        prev_citations = len(self._evidence_tracker.citations)
+        prev_guidelines = len(self._evidence_tracker.guidelines)
+
+        self._evidence_tracker.process_tool_result(tool_name, result_text)
+
+        # Log only NEW guidelines
+        for ref in self._evidence_tracker.guidelines[prev_guidelines:]:
+            self._audit.log_guideline_retrieved(
+                guideline_id=ref.guideline_id,
+                title=ref.title,
+                organization=ref.organization,
+                sections=ref.sections_consulted,
+            )
+
+        # Log only NEW citations
+        for citation in self._evidence_tracker.citations[prev_citations:]:
+            self._audit.log_evidence_cited(
+                doi=citation.doi,
+                pmid=citation.pmid,
+                recommendation=citation.recommendation,
+                source=citation.source.value,
+                strength=citation.strength.value if citation.strength else None,
+            )
+
     async def _execute_tool_calls(
         self,
         tool_calls: list[ToolCall],
@@ -180,6 +212,9 @@ class ReActLoop:
                 try:
                     tool_output = await self._mcp.call_tool(tc.name, tc.arguments)
                     self._audit.log_tool_result(tc.name, tool_output)
+                    # Track evidence from guideline tools
+                    if self._evidence_tracker is not None:
+                        self._process_evidence(tc.name, tool_output)
                     session.add_tool_result(tc.id, tool_output)
                     _cb.on_tool_result(tc.name, tool_output)
                 except MCPToolError as e:
