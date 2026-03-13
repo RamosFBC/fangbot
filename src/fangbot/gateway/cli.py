@@ -118,6 +118,7 @@ class ChatState:
     mcp: object  # OpenMedicineMCPClient
     skill_loader: object | None = None  # ClinicalSkillLoader
     chart_parser: object | None = None  # ChartParser
+    workflow_engine: object | None = None  # WorkflowEngine
 
     def _rebuild_react(self) -> None:
         from fangbot.brain.react import ReActLoop
@@ -129,6 +130,7 @@ class ChatState:
             max_iterations=self.settings.max_iterations,
             clinical_skill_loader=self.skill_loader,
             chart_parser=self.chart_parser,
+            workflow_engine=self.workflow_engine,
         )
 
 
@@ -494,10 +496,29 @@ async def _chat_async() -> None:
     # Create chart parser (uses same LLM provider for extraction)
     chart_parser = ChartParser(provider)
 
+    # Create workflow engine and register workflows
+    from fangbot.workflows import (
+        AdmissionOneLiner,
+        HandoffDraft,
+        PreRoundSummary,
+        WorkflowEngine,
+    )
+
+    workflow_engine = WorkflowEngine()
+    workflow_engine.register(AdmissionOneLiner)
+    workflow_engine.register(HandoffDraft)
+    workflow_engine.register(PreRoundSummary)
+
+    available_workflows = [
+        {"name": w.name, "description": w.description}
+        for w in workflow_engine.list_workflows()
+    ]
+
     system_prompt = build_system_prompt(
         available_skills=available_skills,
         chart_parsing_available=True,
         uncertainty_calibration=True,
+        available_workflows=available_workflows,
     )
     session = SessionContext(system_prompt=system_prompt)
 
@@ -529,10 +550,11 @@ async def _chat_async() -> None:
         registry = ToolRegistry(mcp)
         tools = await registry.get_tools()
 
-        # Add clinical skill tool and chart parser tool to MCP tools
+        # Add clinical skill tool, chart parser tool, and workflow tool to MCP tools
         skill_tool_def = skill_loader.get_tool_definition()
         chart_tool_def = get_chart_tool_definition()
-        all_tools = [skill_tool_def, chart_tool_def] + tools
+        workflow_tool_def = workflow_engine.get_tool_definition()
+        all_tools = [skill_tool_def, chart_tool_def, workflow_tool_def] + tools
 
         console.print(f"[dim]  Connected to OpenMedicine · {len(tools)} tools available[/dim]\n")
 
@@ -543,6 +565,7 @@ async def _chat_async() -> None:
             max_iterations=settings.max_iterations,
             clinical_skill_loader=skill_loader,
             chart_parser=chart_parser,
+            workflow_engine=workflow_engine,
         )
 
         state = ChatState(
@@ -556,6 +579,7 @@ async def _chat_async() -> None:
             mcp=mcp,
             skill_loader=skill_loader,
             chart_parser=chart_parser,
+            workflow_engine=workflow_engine,
         )
 
         while True:
