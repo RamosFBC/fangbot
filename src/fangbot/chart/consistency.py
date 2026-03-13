@@ -162,7 +162,11 @@ def check_impossible_vitals(chart: PatientChart) -> list[Inconsistency]:
             if num is None:
                 continue
             low, high = _VITAL_RANGES[name_lower]
-            if num <= low or num > high:
+            # Fahrenheit detection for temperature
+            if name_lower in ("temp", "temperature") and num > 50:
+                low, high = 77, 113
+
+            if num < low or num > high:
                 results.append(
                     Inconsistency(
                         type=InconsistencyType.IMPOSSIBLE_VALUE,
@@ -251,12 +255,19 @@ def check_allergy_medication_conflict(chart: PatientChart) -> list[Inconsistency
     """
     results: list[Inconsistency] = []
     allergies = chart.facts_by_category(FactCategory.ALLERGY)
-    medications = chart.facts_by_category(FactCategory.MEDICATION)
+    medications = [
+        f for f in chart.facts_by_category(FactCategory.MEDICATION)
+        if f.status != FactStatus.RESOLVED
+    ]
 
     for allergy in allergies:
-        allergy_name = allergy.name.lower().strip()
+        allergy_name = allergy.name.strip().lower()
         for med in medications:
-            med_name = med.name.lower().strip()
+            med_name = med.name.strip().lower()
+
+            # Skip very short names to avoid false positives
+            if len(allergy_name) < 3 or len(med_name) < 3:
+                continue
 
             # Check if allergy name is a substring of med name or vice versa
             if allergy_name in med_name or med_name in allergy_name:
@@ -366,7 +377,7 @@ def check_copy_forward(chart: PatientChart) -> list[Inconsistency]:
         # Group by value
         by_value: dict[str, list[ChartFact]] = defaultdict(list)
         for f in sorted_facts:
-            by_value[f.value.strip()].append(f)
+            by_value[f.value.strip().lower()].append(f)
 
         for value, occurrences in by_value.items():
             # Only flag if 3+ distinct timestamps have the same value

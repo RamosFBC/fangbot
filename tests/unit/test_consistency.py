@@ -276,6 +276,42 @@ class TestImpossibleVitals:
         results = check_impossible_vitals(chart)
         assert len(results) == 0
 
+    def test_heart_rate_zero_is_valid_asystole(self):
+        """HR=0 (asystole) is a real clinical value and should NOT be flagged."""
+        chart = PatientChart(
+            facts=[self._make_vital("HR", "0 bpm")],
+            raw_text="HR 0",
+        )
+        results = check_impossible_vitals(chart)
+        assert len(results) == 0
+
+    def test_respiratory_rate_zero_is_valid_apnea(self):
+        """RR=0 (apnea) is a real clinical value and should NOT be flagged."""
+        chart = PatientChart(
+            facts=[self._make_vital("RR", "0 breaths/min")],
+            raw_text="RR 0",
+        )
+        results = check_impossible_vitals(chart)
+        assert len(results) == 0
+
+    def test_fahrenheit_temperature_not_flagged(self):
+        """A Fahrenheit temperature like 98.6 should NOT be flagged as impossible."""
+        chart = PatientChart(
+            facts=[self._make_vital("Temp", "98.6 F")],
+            raw_text="T 98.6 F",
+        )
+        results = check_impossible_vitals(chart)
+        assert len(results) == 0
+
+    def test_fahrenheit_high_fever_flagged(self):
+        """A Fahrenheit temperature above 113 (45 C) should be flagged."""
+        chart = PatientChart(
+            facts=[self._make_vital("Temp", "120 F")],
+            raw_text="T 120 F",
+        )
+        results = check_impossible_vitals(chart)
+        assert len(results) == 1
+
     def test_multiple_impossible_vitals(self):
         chart = PatientChart(
             facts=[
@@ -519,6 +555,44 @@ class TestAllergyMedicationConflict:
         results = check_allergy_medication_conflict(chart)
         assert len(results) == 1
         assert results[0].severity == InconsistencySeverity.WARNING
+
+    def test_short_allergy_name_no_false_positive(self):
+        """Allergy names shorter than 3 chars should NOT trigger substring matching."""
+        allergy = ChartFact(
+            name="K",
+            value="rash",
+            category=FactCategory.ALLERGY,
+            source="Allergy list",
+        )
+        med = ChartFact(
+            name="Potassium Chloride",
+            value="20mEq daily",
+            category=FactCategory.MEDICATION,
+            source="Med list",
+        )
+        chart = PatientChart(facts=[allergy, med], raw_text="...")
+        results = check_allergy_medication_conflict(chart)
+        assert len(results) == 0
+
+    def test_resolved_medication_no_allergy_conflict(self):
+        """A RESOLVED medication should NOT trigger an allergy conflict."""
+        allergy = ChartFact(
+            name="Penicillin",
+            value="anaphylaxis",
+            category=FactCategory.ALLERGY,
+            source="Allergy list",
+            status=FactStatus.ACTIVE,
+        )
+        med = ChartFact(
+            name="Penicillin",
+            value="500mg q6h",
+            category=FactCategory.MEDICATION,
+            source="Med list",
+            status=FactStatus.RESOLVED,
+        )
+        chart = PatientChart(facts=[allergy, med], raw_text="...")
+        results = check_allergy_medication_conflict(chart)
+        assert len(results) == 0
 
     def test_multiple_allergies_multiple_meds(self):
         facts = [
