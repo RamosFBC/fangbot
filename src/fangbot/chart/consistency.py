@@ -284,3 +284,57 @@ def check_allergy_medication_conflict(chart: PatientChart) -> list[Inconsistency
                 )
 
     return results
+
+
+def check_status_conflicts(chart: PatientChart) -> list[Inconsistency]:
+    """Detect facts with the same name and category but conflicting statuses.
+
+    For example, a diagnosis listed as both ACTIVE and RESOLVED indicates
+    a documentation error that needs resolution.
+    """
+    results: list[Inconsistency] = []
+
+    # Only check facts that have a status set
+    facts_with_status = [f for f in chart.facts if f.status is not None]
+
+    # Group by (name_lower, category)
+    groups: dict[tuple[str, FactCategory], list[ChartFact]] = defaultdict(list)
+    for fact in facts_with_status:
+        key = (fact.name.lower().strip(), fact.category)
+        groups[key].append(fact)
+
+    for (_name, _cat), facts in groups.items():
+        if len(facts) < 2:
+            continue
+
+        statuses = {f.status for f in facts}
+        if len(statuses) > 1:
+            # Find the conflicting pair
+            by_status: dict[FactStatus, ChartFact] = {}
+            for f in facts:
+                assert f.status is not None  # guaranteed by filter above
+                if f.status not in by_status:
+                    by_status[f.status] = f
+
+            status_list = list(by_status.keys())
+            for i, s1 in enumerate(status_list):
+                for s2 in status_list[i + 1 :]:
+                    results.append(
+                        Inconsistency(
+                            type=InconsistencyType.STATUS_CONFLICT,
+                            severity=InconsistencySeverity.WARNING,
+                            description=(
+                                f"'{by_status[s1].name}' has conflicting statuses: "
+                                f"{s1.value} ({by_status[s1].source}) vs "
+                                f"{s2.value} ({by_status[s2].source})"
+                            ),
+                            fact_a=by_status[s1],
+                            fact_b=by_status[s2],
+                            recommendation=(
+                                f"Clarify current status of {by_status[s1].name} — "
+                                f"is it {s1.value} or {s2.value}?"
+                            ),
+                        )
+                    )
+
+    return results

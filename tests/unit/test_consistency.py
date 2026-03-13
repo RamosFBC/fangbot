@@ -14,6 +14,7 @@ from fangbot.chart.consistency import (
     check_allergy_medication_conflict,
     check_duplicate_facts,
     check_impossible_vitals,
+    check_status_conflicts,
 )
 from fangbot.chart.models import ChartFact, FactCategory, FactStatus, PatientChart
 
@@ -549,3 +550,125 @@ class TestAllergyMedicationConflict:
         # Penicillin does not substring-match Amoxicillin, so only 0 matches
         # (unless we add cross-reactivity, which is out of scope)
         assert len(results) == 0
+
+
+class TestStatusConflicts:
+    def test_same_diagnosis_active_and_resolved(self):
+        active = ChartFact(
+            name="Diabetes Mellitus Type 2",
+            value="yes",
+            category=FactCategory.DIAGNOSIS,
+            source="Problem list",
+            status=FactStatus.ACTIVE,
+        )
+        resolved = ChartFact(
+            name="Diabetes Mellitus Type 2",
+            value="resolved",
+            category=FactCategory.DIAGNOSIS,
+            source="Discharge summary",
+            status=FactStatus.RESOLVED,
+        )
+        chart = PatientChart(facts=[active, resolved], raw_text="...")
+        results = check_status_conflicts(chart)
+        assert len(results) == 1
+        assert results[0].type == InconsistencyType.STATUS_CONFLICT
+        assert results[0].severity == InconsistencySeverity.WARNING
+
+    def test_same_medication_active_and_resolved(self):
+        active = ChartFact(
+            name="Metformin",
+            value="500mg BID",
+            category=FactCategory.MEDICATION,
+            source="Active meds",
+            status=FactStatus.ACTIVE,
+        )
+        resolved = ChartFact(
+            name="Metformin",
+            value="discontinued",
+            category=FactCategory.MEDICATION,
+            source="Discharge meds",
+            status=FactStatus.RESOLVED,
+        )
+        chart = PatientChart(facts=[active, resolved], raw_text="...")
+        results = check_status_conflicts(chart)
+        assert len(results) == 1
+
+    def test_same_name_same_status_no_flag(self):
+        fact_a = ChartFact(
+            name="HTN",
+            value="yes",
+            category=FactCategory.DIAGNOSIS,
+            source="PMH",
+            status=FactStatus.ACTIVE,
+        )
+        fact_b = ChartFact(
+            name="HTN",
+            value="controlled",
+            category=FactCategory.DIAGNOSIS,
+            source="Assessment",
+            status=FactStatus.ACTIVE,
+        )
+        chart = PatientChart(facts=[fact_a, fact_b], raw_text="...")
+        results = check_status_conflicts(chart)
+        assert len(results) == 0
+
+    def test_no_status_facts_no_flag(self):
+        chart = PatientChart(
+            facts=[
+                ChartFact(
+                    name="HTN",
+                    value="yes",
+                    category=FactCategory.DIAGNOSIS,
+                    source="PMH",
+                ),
+            ],
+            raw_text="...",
+        )
+        results = check_status_conflicts(chart)
+        assert len(results) == 0
+
+    def test_different_names_different_statuses_no_flag(self):
+        chart = PatientChart(
+            facts=[
+                ChartFact(
+                    name="HTN",
+                    value="yes",
+                    category=FactCategory.DIAGNOSIS,
+                    source="PMH",
+                    status=FactStatus.ACTIVE,
+                ),
+                ChartFact(
+                    name="Appendicitis",
+                    value="resolved 2020",
+                    category=FactCategory.DIAGNOSIS,
+                    source="PSH",
+                    status=FactStatus.RESOLVED,
+                ),
+            ],
+            raw_text="...",
+        )
+        results = check_status_conflicts(chart)
+        assert len(results) == 0
+
+    def test_case_insensitive_name_match(self):
+        chart = PatientChart(
+            facts=[
+                ChartFact(
+                    name="diabetes mellitus",
+                    value="yes",
+                    category=FactCategory.DIAGNOSIS,
+                    source="A",
+                    status=FactStatus.ACTIVE,
+                ),
+                ChartFact(
+                    name="Diabetes Mellitus",
+                    value="resolved",
+                    category=FactCategory.DIAGNOSIS,
+                    source="B",
+                    status=FactStatus.RESOLVED,
+                ),
+            ],
+            raw_text="...",
+        )
+        results = check_status_conflicts(chart)
+        assert len(results) == 1
