@@ -103,7 +103,7 @@ def detect_trends(
     Args:
         chart: The patient chart with extracted facts.
         stable_threshold: Proportional change rate below which a trend
-            is classified as STABLE. Default 0.01 (1% of mean per hour).
+            is classified as STABLE. Default 0.005 (0.5% of mean per hour).
         categories: Which fact categories to analyze. Defaults to LAB and VITAL.
 
     Returns:

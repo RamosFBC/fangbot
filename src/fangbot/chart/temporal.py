@@ -56,19 +56,9 @@ class BaselineComparison(BaseModel):
     summary: str = ""
 
 
-import re
 from collections import defaultdict
 
-
-def _extract_numeric(value: str) -> float | None:
-    """Extract the first numeric value from a string."""
-    match = re.search(r"[-+]?\d*\.?\d+", value)
-    if match:
-        try:
-            return float(match.group())
-        except ValueError:
-            return None
-    return None
+from fangbot.chart.trends import TrendDirection, _extract_numeric, detect_trends
 
 
 def classify_facts(chart: PatientChart) -> list[TemporalFact]:
@@ -88,7 +78,15 @@ def classify_facts(chart: PatientChart) -> list[TemporalFact]:
     Returns:
         List of TemporalFact, one per input fact, preserving order.
     """
-    # Pre-compute trend info for numeric series
+    # Use detect_trends to determine direction for each numeric series
+    trends = detect_trends(chart)
+    series_direction: dict[str, str] = {
+        trend.fact_name: trend.direction.value
+        for trend in trends
+        if trend.direction != TrendDirection.INSUFFICIENT_DATA
+    }
+
+    # Pre-compute which index is the latest timestamped value per numeric series
     numeric_series: dict[str, list[tuple[float, datetime, int]]] = defaultdict(list)
     for idx, fact in enumerate(chart.facts):
         if fact.timestamp is None:
@@ -99,30 +97,9 @@ def classify_facts(chart: PatientChart) -> list[TemporalFact]:
         if num is not None:
             numeric_series[fact.name].append((num, fact.timestamp, idx))
 
-    # Sort each series by timestamp
     for name in numeric_series:
         numeric_series[name].sort(key=lambda x: x[1])
 
-    # Determine direction for each series
-    series_direction: dict[str, str] = {}
-    for name, points in numeric_series.items():
-        if len(points) < 2:
-            continue
-        first_val = points[0][0]
-        last_val = points[-1][0]
-        diff = last_val - first_val
-        mean = (first_val + last_val) / 2
-        if abs(mean) < 1e-12:
-            continue
-        ratio = abs(diff) / abs(mean)
-        if ratio < 0.02:
-            series_direction[name] = "stable"
-        elif diff > 0:
-            series_direction[name] = "rising"
-        else:
-            series_direction[name] = "falling"
-
-    # Track which index is the latest in each series
     latest_idx: dict[str, int] = {}
     for name, points in numeric_series.items():
         if len(points) >= 2:

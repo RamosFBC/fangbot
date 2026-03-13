@@ -58,7 +58,8 @@ def segment_episodes(
         for fact in sorted_facts[1:]:
             prev_ts = current_cluster[-1].timestamp
             curr_ts = fact.timestamp
-            assert prev_ts is not None and curr_ts is not None
+            if prev_ts is None or curr_ts is None:
+                continue  # skip facts without timestamps
             if curr_ts - prev_ts <= window:
                 current_cluster.append(fact)
             else:
@@ -72,7 +73,8 @@ def segment_episodes(
         for cluster in clusters:
             start_ts = cluster[0].timestamp
             end_ts = cluster[-1].timestamp
-            assert start_ts is not None and end_ts is not None
+            if start_ts is None or end_ts is None:
+                continue  # skip clusters without timestamps
 
             names = sorted({f.name for f in cluster})
             if len(names) <= 3:
