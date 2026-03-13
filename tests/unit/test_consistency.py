@@ -1026,3 +1026,25 @@ class TestRunAllChecks:
         assert report.is_clean, (
             f"False positive on clean chart: {[i.description for i in report.inconsistencies]}"
         )
+
+
+from fangbot.memory.audit import EventType
+
+
+class TestIntegration:
+    def test_chart_consistency_event_type_exists(self):
+        assert EventType.CHART_CONSISTENCY == "chart_consistency"
+
+    def test_public_api_exports(self):
+        from fangbot.chart import (
+            ConsistencyReport,
+            Inconsistency,
+            InconsistencySeverity,
+            InconsistencyType,
+            run_all_checks,
+        )
+        assert ConsistencyReport is not None
+        assert Inconsistency is not None
+        assert InconsistencySeverity is not None
+        assert InconsistencyType is not None
+        assert callable(run_all_checks)
