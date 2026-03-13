@@ -133,8 +133,13 @@ class TestEvidenceExtractor:
         assert refs[1].guideline_id == "esc-afib-2020"
 
     def test_classify_source_type_guideline(self):
-        text = "Guideline: AHA/ACC 2023\nRecommendation Class I, Level of Evidence A"
+        text = (
+            "Guideline: AHA/ACC 2023\n"
+            "Recommendation Class I, Level of Evidence A\n"
+            "DOI: 10.1161/CIR.0000000000001123"
+        )
         citations = self.extractor.extract_citations(text, tool_name="retrieve_guideline")
+        assert len(citations) >= 1
         assert all(c.source == EvidenceSource.GUIDELINE for c in citations)
 
     def test_classify_source_type_trial(self):
