@@ -209,3 +209,144 @@ class TestReActLoop:
         assert EventType.TOOL_CALL in event_types
         assert EventType.TOOL_RESULT in event_types
         assert EventType.SYNTHESIS in event_types
+
+    @pytest.mark.asyncio
+    async def test_uncertainty_extracted_from_synthesis(self, sample_tools, audit_logger, session):
+        """When synthesis contains an uncertainty block, it is parsed into result.uncertainty."""
+        synthesis_with_block = (
+            "The CHA2DS2-VASc score is 3.\n"
+            "---\n"
+            "Confidence: HIGH\n"
+            "Reasoning: All parameters present and validated\n"
+            "Missing data: None\n"
+            "Contradictions: None\n"
+            "---"
+        )
+        provider = MockProvider(
+            responses=[
+                ProviderResponse(
+                    content="Searching.",
+                    tool_calls=[
+                        ToolCall(
+                            id="tc_u1",
+                            name="search_clinical_calculators",
+                            arguments={"query": "CHA2DS2-VASc"},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+                ProviderResponse(
+                    content="Executing.",
+                    tool_calls=[
+                        ToolCall(
+                            id="tc_u2",
+                            name="execute_clinical_calculator",
+                            arguments={"calculator_id": "chadsvasc", "parameters": {}},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+                ProviderResponse(
+                    content=synthesis_with_block,
+                    stop_reason="end_turn",
+                ),
+            ]
+        )
+        mcp = MockMCPClient(
+            tool_results={
+                "search_clinical_calculators": "Found: CHA2DS2-VASc",
+                "execute_clinical_calculator": "Score: 3",
+            }
+        )
+        loop = ReActLoop(provider=provider, mcp_client=mcp, audit_logger=audit_logger)
+        result = await loop.run("Calculate CHA2DS2-VASc", session, sample_tools)
+
+        assert result.uncertainty is not None
+        assert result.uncertainty.confidence.value == "high"
+        assert result.uncertainty.escalation_recommended is False
+        # Synthesis should have the block stripped
+        assert "Confidence:" not in result.synthesis
+
+    @pytest.mark.asyncio
+    async def test_uncertainty_none_when_no_block(self, sample_tools, audit_logger, session):
+        """When synthesis has no uncertainty block, result.uncertainty is None."""
+        provider = MockProvider(
+            responses=[
+                ProviderResponse(
+                    content="Searching.",
+                    tool_calls=[
+                        ToolCall(
+                            id="tc_n1",
+                            name="search_clinical_calculators",
+                            arguments={"query": "test"},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+                ProviderResponse(
+                    content="The score is 3. No uncertainty block.",
+                    stop_reason="end_turn",
+                ),
+            ]
+        )
+        mcp = MockMCPClient()
+        loop = ReActLoop(provider=provider, mcp_client=mcp, audit_logger=audit_logger)
+        result = await loop.run("Test", session, sample_tools)
+
+        assert result.uncertainty is None
+
+    @pytest.mark.asyncio
+    async def test_uncertainty_audit_event_logged(self, sample_tools, audit_logger, session):
+        """When uncertainty is extracted, a confidence_assessment audit event is logged."""
+        synthesis_with_block = (
+            "Result.\n"
+            "---\n"
+            "Confidence: MODERATE\n"
+            "Reasoning: Age estimated\n"
+            "Missing data: Exact DOB\n"
+            "Contradictions: None\n"
+            "---"
+        )
+        provider = MockProvider(
+            responses=[
+                ProviderResponse(
+                    content="Searching.",
+                    tool_calls=[
+                        ToolCall(
+                            id="tc_a1",
+                            name="search_clinical_calculators",
+                            arguments={"query": "test"},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+                ProviderResponse(
+                    content="Executing.",
+                    tool_calls=[
+                        ToolCall(
+                            id="tc_a2",
+                            name="execute_clinical_calculator",
+                            arguments={"calculator_id": "test", "parameters": {}},
+                        )
+                    ],
+                    stop_reason="tool_use",
+                ),
+                ProviderResponse(
+                    content=synthesis_with_block,
+                    stop_reason="end_turn",
+                ),
+            ]
+        )
+        mcp = MockMCPClient(
+            tool_results={
+                "search_clinical_calculators": "Found",
+                "execute_clinical_calculator": "Result",
+            }
+        )
+        loop = ReActLoop(provider=provider, mcp_client=mcp, audit_logger=audit_logger)
+        await loop.run("Test", session, sample_tools)
+
+        events = audit_logger.get_events()
+        confidence_events = [e for e in events if e.event_type == EventType.CONFIDENCE_ASSESSMENT]
+        assert len(confidence_events) == 1
+        assert confidence_events[0].data["confidence"] == "moderate"
