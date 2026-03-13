@@ -5,6 +5,7 @@ from __future__ import annotations
 from fangbot.skills.evidence import (
     EvidenceCitation,
     EvidenceConflict,
+    EvidenceExtractor,
     EvidenceSource,
     EvidenceStrength,
     GuidelineReference,
@@ -82,3 +83,85 @@ class TestEvidenceModels:
         assert EvidenceStrength.MODERATE.value == "moderate"
         assert EvidenceStrength.WEAK.value == "weak"
         assert EvidenceStrength.EXPERT_OPINION.value == "expert_opinion"
+
+
+class TestEvidenceExtractor:
+    """Test evidence extraction from MCP tool result text."""
+
+    def setup_method(self):
+        self.extractor = EvidenceExtractor()
+
+    def test_extract_dois_from_text(self):
+        text = (
+            "Guideline: AHA/ACC 2023 Atrial Fibrillation Guidelines\n"
+            "DOI: 10.1161/CIR.0000000000001123\n"
+            "Recommendation: Oral anticoagulation is recommended for patients with AF "
+            "and a CHA2DS2-VASc score >= 2 in men or >= 3 in women."
+        )
+        citations = self.extractor.extract_citations(text, tool_name="retrieve_guideline")
+        assert len(citations) >= 1
+        assert any(c.doi == "10.1161/CIR.0000000000001123" for c in citations)
+
+    def test_extract_pmids_from_text(self):
+        text = "PMID: 37634560\nThe SPRINT trial showed intensive BP control reduced events."
+        citations = self.extractor.extract_citations(text, tool_name="retrieve_guideline")
+        assert any(c.pmid == "37634560" for c in citations)
+
+    def test_extract_guideline_reference(self):
+        text = (
+            "Guideline ID: kdigo-2024-ckd\n"
+            "Title: KDIGO 2024 Clinical Practice Guideline for CKD Evaluation and Management\n"
+            "Organization: KDIGO\n"
+            "Year: 2024\n"
+            "Section: Chapter 1 — Definition and Classification of CKD"
+        )
+        ref = self.extractor.extract_guideline_reference(text)
+        assert ref is not None
+        assert ref.guideline_id == "kdigo-2024-ckd"
+        assert ref.organization == "KDIGO"
+        assert ref.year == 2024
+
+    def test_extract_from_search_results(self):
+        text = (
+            "Found 2 guidelines:\n"
+            "1. [aha-afib-2023] AHA/ACC/HRS 2023 AFib Guidelines — DOI: 10.1161/CIR.001\n"
+            "2. [esc-afib-2020] ESC 2020 AFib Guidelines — DOI: 10.1093/eurheartj/ehaa612"
+        )
+        refs = self.extractor.extract_search_results(text)
+        assert len(refs) == 2
+        assert refs[0].guideline_id == "aha-afib-2023"
+        assert refs[1].guideline_id == "esc-afib-2020"
+
+    def test_classify_source_type_guideline(self):
+        text = "Guideline: AHA/ACC 2023\nRecommendation Class I, Level of Evidence A"
+        citations = self.extractor.extract_citations(text, tool_name="retrieve_guideline")
+        assert all(c.source == EvidenceSource.GUIDELINE for c in citations)
+
+    def test_classify_source_type_trial(self):
+        text = "Landmark Trial: SPRINT (2015)\nPMID: 26551272\nIntensive BP control reduced CV events."
+        citations = self.extractor.extract_citations(text, tool_name="retrieve_guideline")
+        assert any(c.source == EvidenceSource.LANDMARK_TRIAL for c in citations)
+
+    def test_extract_strength(self):
+        text = (
+            "Recommendation: Use direct oral anticoagulants over warfarin.\n"
+            "Strength: Strong recommendation (Class I, Level A)\n"
+            "DOI: 10.1161/CIR.001"
+        )
+        citations = self.extractor.extract_citations(text, tool_name="retrieve_guideline")
+        assert len(citations) >= 1
+        assert citations[0].strength is not None
+
+    def test_empty_text_returns_no_citations(self):
+        citations = self.extractor.extract_citations("", tool_name="retrieve_guideline")
+        assert citations == []
+
+    def test_no_evidence_in_text(self):
+        citations = self.extractor.extract_citations(
+            "The weather is nice today.", tool_name="retrieve_guideline"
+        )
+        assert citations == []
+
+    def test_extract_search_results_empty(self):
+        refs = self.extractor.extract_search_results("No guidelines found.")
+        assert refs == []
