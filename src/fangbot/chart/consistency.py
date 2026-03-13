@@ -7,6 +7,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+import re
+
 from fangbot.chart.models import ChartFact, FactCategory, FactStatus, PatientChart
 
 
@@ -77,3 +79,100 @@ class ConsistencyReport(BaseModel):
     def by_severity(self, severity: InconsistencySeverity) -> list[Inconsistency]:
         """Return inconsistencies filtered by severity level."""
         return [i for i in self.inconsistencies if i.severity == severity]
+
+
+def _extract_number(value: str) -> float | None:
+    """Extract the first numeric value from a string like '72 bpm' or '37.2 C'."""
+    match = re.search(r"-?\d+\.?\d*", value)
+    if match:
+        return float(match.group())
+    return None
+
+
+def _extract_bp(value: str) -> tuple[float, float] | None:
+    """Extract systolic/diastolic from a BP string like '120/80 mmHg'."""
+    match = re.search(r"(\d+)\s*/\s*(\d+)", value)
+    if match:
+        return float(match.group(1)), float(match.group(2))
+    return None
+
+
+# Vital sign ranges: (min_valid, max_valid)
+# Values outside these ranges are flagged as impossible.
+_VITAL_RANGES: dict[str, tuple[float, float]] = {
+    "hr": (0, 300),
+    "heart rate": (0, 300),
+    "spo2": (0, 100),
+    "o2 sat": (0, 100),
+    "oxygen saturation": (0, 100),
+    "temp": (25, 45),
+    "temperature": (25, 45),
+    "rr": (0, 80),
+    "respiratory rate": (0, 80),
+}
+
+# Names that represent blood pressure
+_BP_NAMES: set[str] = {"bp", "blood pressure", "nibp"}
+
+
+def check_impossible_vitals(chart: PatientChart) -> list[Inconsistency]:
+    """Check for physiologically impossible vital sign values."""
+    results: list[Inconsistency] = []
+    vitals = chart.facts_by_category(FactCategory.VITAL)
+
+    for fact in vitals:
+        name_lower = fact.name.lower().strip()
+
+        # Check blood pressure separately (systolic must exceed diastolic)
+        if name_lower in _BP_NAMES:
+            bp = _extract_bp(fact.value)
+            if bp is not None:
+                systolic, diastolic = bp
+                if systolic <= diastolic:
+                    results.append(
+                        Inconsistency(
+                            type=InconsistencyType.IMPOSSIBLE_VALUE,
+                            severity=InconsistencySeverity.CRITICAL,
+                            description=(
+                                f"BP systolic ({systolic}) <= diastolic ({diastolic}): "
+                                f"{fact.value}"
+                            ),
+                            fact_a=fact,
+                            recommendation="Verify blood pressure reading — systolic must exceed diastolic",
+                        )
+                    )
+                if systolic < 0 or diastolic < 0 or systolic > 350 or diastolic > 250:
+                    results.append(
+                        Inconsistency(
+                            type=InconsistencyType.IMPOSSIBLE_VALUE,
+                            severity=InconsistencySeverity.CRITICAL,
+                            description=(
+                                f"BP values out of physiological range: {fact.value}"
+                            ),
+                            fact_a=fact,
+                            recommendation="Review blood pressure entry for data error",
+                        )
+                    )
+            continue
+
+        # Check numeric vitals against known ranges
+        if name_lower in _VITAL_RANGES:
+            num = _extract_number(fact.value)
+            if num is None:
+                continue
+            low, high = _VITAL_RANGES[name_lower]
+            if num <= low or num > high:
+                results.append(
+                    Inconsistency(
+                        type=InconsistencyType.IMPOSSIBLE_VALUE,
+                        severity=InconsistencySeverity.CRITICAL,
+                        description=(
+                            f"{fact.name} value {num} is outside physiological range "
+                            f"({low}-{high}): {fact.value}"
+                        ),
+                        fact_a=fact,
+                        recommendation=f"Review {fact.name} entry for data entry error",
+                    )
+                )
+
+    return results
