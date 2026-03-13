@@ -11,6 +11,7 @@ from fangbot.chart.consistency import (
     Inconsistency,
     InconsistencySeverity,
     InconsistencyType,
+    check_allergy_medication_conflict,
     check_duplicate_facts,
     check_impossible_vitals,
 )
@@ -406,3 +407,145 @@ class TestDuplicateFacts:
         )
         results = check_duplicate_facts(chart)
         assert len(results) == 1
+
+
+class TestAllergyMedicationConflict:
+    def test_exact_match_allergy_and_medication(self):
+        allergy = ChartFact(
+            name="Penicillin",
+            value="anaphylaxis",
+            category=FactCategory.ALLERGY,
+            source="Allergy list",
+            status=FactStatus.ACTIVE,
+        )
+        med = ChartFact(
+            name="Penicillin",
+            value="500mg q6h",
+            category=FactCategory.MEDICATION,
+            source="Med list",
+            status=FactStatus.ACTIVE,
+        )
+        chart = PatientChart(facts=[allergy, med], raw_text="...")
+        results = check_allergy_medication_conflict(chart)
+        assert len(results) == 1
+        assert results[0].type == InconsistencyType.ALLERGY_VIOLATION
+        assert results[0].severity == InconsistencySeverity.CRITICAL
+        assert results[0].fact_a == allergy
+        assert results[0].fact_b == med
+
+    def test_case_insensitive_match(self):
+        allergy = ChartFact(
+            name="penicillin",
+            value="rash",
+            category=FactCategory.ALLERGY,
+            source="Allergy list",
+        )
+        med = ChartFact(
+            name="Penicillin VK",
+            value="500mg",
+            category=FactCategory.MEDICATION,
+            source="Med list",
+        )
+        chart = PatientChart(facts=[allergy, med], raw_text="...")
+        results = check_allergy_medication_conflict(chart)
+        assert len(results) == 1
+
+    def test_substring_match_drug_in_med_name(self):
+        """Allergy 'sulfa' should match medication 'sulfamethoxazole'."""
+        allergy = ChartFact(
+            name="Sulfa",
+            value="hives",
+            category=FactCategory.ALLERGY,
+            source="Allergy list",
+        )
+        med = ChartFact(
+            name="Sulfamethoxazole-Trimethoprim",
+            value="DS tablet BID",
+            category=FactCategory.MEDICATION,
+            source="Med list",
+        )
+        chart = PatientChart(facts=[allergy, med], raw_text="...")
+        results = check_allergy_medication_conflict(chart)
+        assert len(results) == 1
+
+    def test_no_allergy_no_flag(self):
+        med = ChartFact(
+            name="Lisinopril",
+            value="10mg daily",
+            category=FactCategory.MEDICATION,
+            source="Med list",
+        )
+        chart = PatientChart(facts=[med], raw_text="...")
+        results = check_allergy_medication_conflict(chart)
+        assert len(results) == 0
+
+    def test_unrelated_allergy_no_flag(self):
+        allergy = ChartFact(
+            name="Penicillin",
+            value="rash",
+            category=FactCategory.ALLERGY,
+            source="Allergy list",
+        )
+        med = ChartFact(
+            name="Lisinopril",
+            value="10mg",
+            category=FactCategory.MEDICATION,
+            source="Med list",
+        )
+        chart = PatientChart(facts=[allergy, med], raw_text="...")
+        results = check_allergy_medication_conflict(chart)
+        assert len(results) == 0
+
+    def test_resolved_allergy_lower_severity(self):
+        """A resolved allergy should still flag but with WARNING not CRITICAL."""
+        allergy = ChartFact(
+            name="Amoxicillin",
+            value="childhood rash",
+            category=FactCategory.ALLERGY,
+            source="Allergy list",
+            status=FactStatus.RESOLVED,
+        )
+        med = ChartFact(
+            name="Amoxicillin",
+            value="875mg BID",
+            category=FactCategory.MEDICATION,
+            source="Med list",
+            status=FactStatus.ACTIVE,
+        )
+        chart = PatientChart(facts=[allergy, med], raw_text="...")
+        results = check_allergy_medication_conflict(chart)
+        assert len(results) == 1
+        assert results[0].severity == InconsistencySeverity.WARNING
+
+    def test_multiple_allergies_multiple_meds(self):
+        facts = [
+            ChartFact(
+                name="Penicillin",
+                value="anaphylaxis",
+                category=FactCategory.ALLERGY,
+                source="Allergy list",
+            ),
+            ChartFact(
+                name="Sulfa",
+                value="hives",
+                category=FactCategory.ALLERGY,
+                source="Allergy list",
+            ),
+            ChartFact(
+                name="Amoxicillin",
+                value="500mg",
+                category=FactCategory.MEDICATION,
+                source="Med list",
+            ),
+            ChartFact(
+                name="Lisinopril",
+                value="10mg",
+                category=FactCategory.MEDICATION,
+                source="Med list",
+            ),
+        ]
+        chart = PatientChart(facts=facts, raw_text="...")
+        results = check_allergy_medication_conflict(chart)
+        # Penicillin does not substring-match Amoxicillin, so only 0 matches
+        # (unless we add cross-reactivity, which is out of scope)
+        assert len(results) == 0

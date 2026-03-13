@@ -239,3 +239,48 @@ def check_duplicate_facts(chart: PatientChart) -> list[Inconsistency]:
                     )
 
     return results
+
+
+def check_allergy_medication_conflict(chart: PatientChart) -> list[Inconsistency]:
+    """Detect medications that match a documented allergy.
+
+    Uses case-insensitive substring matching: if the allergy name appears
+    within the medication name, or vice versa, it's flagged. Cross-reactivity
+    (e.g., penicillin allergy + amoxicillin) is NOT handled — that requires
+    a drug ontology and is a future enhancement.
+    """
+    results: list[Inconsistency] = []
+    allergies = chart.facts_by_category(FactCategory.ALLERGY)
+    medications = chart.facts_by_category(FactCategory.MEDICATION)
+
+    for allergy in allergies:
+        allergy_name = allergy.name.lower().strip()
+        for med in medications:
+            med_name = med.name.lower().strip()
+
+            # Check if allergy name is a substring of med name or vice versa
+            if allergy_name in med_name or med_name in allergy_name:
+                # Resolved allergy gets WARNING, active/unknown gets CRITICAL
+                if allergy.status == FactStatus.RESOLVED:
+                    severity = InconsistencySeverity.WARNING
+                else:
+                    severity = InconsistencySeverity.CRITICAL
+
+                results.append(
+                    Inconsistency(
+                        type=InconsistencyType.ALLERGY_VIOLATION,
+                        severity=severity,
+                        description=(
+                            f"Allergy to '{allergy.name}' ({allergy.value}) conflicts "
+                            f"with active medication '{med.name}' ({med.value})"
+                        ),
+                        fact_a=allergy,
+                        fact_b=med,
+                        recommendation=(
+                            f"Verify allergy status and medication safety — "
+                            f"allergy '{allergy.name}' documented with reaction: {allergy.value}"
+                        ),
+                    )
+                )
+
+    return results
