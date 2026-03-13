@@ -391,3 +391,19 @@ def check_copy_forward(chart: PatientChart) -> list[Inconsistency]:
                 )
 
     return results
+
+
+def run_all_checks(chart: PatientChart) -> ConsistencyReport:
+    """Run all consistency checks and return a consolidated report."""
+    all_inconsistencies: list[Inconsistency] = []
+
+    all_inconsistencies.extend(check_impossible_vitals(chart))
+    all_inconsistencies.extend(check_duplicate_facts(chart))
+    all_inconsistencies.extend(check_allergy_medication_conflict(chart))
+    all_inconsistencies.extend(check_status_conflicts(chart))
+    all_inconsistencies.extend(check_copy_forward(chart))
+
+    return ConsistencyReport(
+        inconsistencies=all_inconsistencies,
+        facts_checked=len(chart.facts),
+    )

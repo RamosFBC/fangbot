@@ -16,6 +16,7 @@ from fangbot.chart.consistency import (
     check_duplicate_facts,
     check_impossible_vitals,
     check_status_conflicts,
+    run_all_checks,
 )
 from fangbot.chart.models import ChartFact, FactCategory, FactStatus, PatientChart
 
@@ -814,3 +815,214 @@ class TestCopyForward:
         assert len(results) == 1
         assert results[0].fact_a == facts[0]
         assert results[0].fact_b == facts[2]
+
+
+class TestRunAllChecks:
+    def test_clean_chart_returns_clean_report(self):
+        chart = PatientChart(
+            facts=[
+                ChartFact(
+                    name="HR",
+                    value="72 bpm",
+                    category=FactCategory.VITAL,
+                    source="Triage",
+                ),
+                ChartFact(
+                    name="BP",
+                    value="120/80 mmHg",
+                    category=FactCategory.VITAL,
+                    source="Triage",
+                ),
+                ChartFact(
+                    name="Lisinopril",
+                    value="10mg daily",
+                    category=FactCategory.MEDICATION,
+                    source="Med list",
+                    status=FactStatus.ACTIVE,
+                ),
+            ],
+            raw_text="HR 72, BP 120/80, Lisinopril 10mg",
+        )
+        report = run_all_checks(chart)
+        assert report.is_clean
+        assert report.facts_checked == 3
+        assert report.checked_at is not None
+
+    def test_chart_with_multiple_issues(self):
+        chart = PatientChart(
+            facts=[
+                # Impossible vital
+                ChartFact(
+                    name="HR",
+                    value="-10 bpm",
+                    category=FactCategory.VITAL,
+                    source="Vitals",
+                ),
+                # Allergy violation
+                ChartFact(
+                    name="Penicillin",
+                    value="anaphylaxis",
+                    category=FactCategory.ALLERGY,
+                    source="Allergy list",
+                ),
+                ChartFact(
+                    name="Penicillin",
+                    value="500mg q6h",
+                    category=FactCategory.MEDICATION,
+                    source="Med list",
+                ),
+                # Status conflict
+                ChartFact(
+                    name="CHF",
+                    value="yes",
+                    category=FactCategory.DIAGNOSIS,
+                    source="Problem list",
+                    status=FactStatus.ACTIVE,
+                ),
+                ChartFact(
+                    name="CHF",
+                    value="resolved",
+                    category=FactCategory.DIAGNOSIS,
+                    source="Discharge",
+                    status=FactStatus.RESOLVED,
+                ),
+            ],
+            raw_text="HR -10, allergy penicillin, on penicillin, CHF active/resolved",
+        )
+        report = run_all_checks(chart)
+        assert not report.is_clean
+        assert report.facts_checked == 5
+        # Should catch: impossible vital, allergy violation, status conflict
+        assert len(report.inconsistencies) >= 3
+
+    def test_empty_chart_returns_clean_report(self):
+        chart = PatientChart(facts=[], raw_text="No data")
+        report = run_all_checks(chart)
+        assert report.is_clean
+        assert report.facts_checked == 0
+
+    def test_report_contains_all_severity_levels(self):
+        chart = PatientChart(
+            facts=[
+                # CRITICAL: impossible vital
+                ChartFact(
+                    name="SpO2",
+                    value="110%",
+                    category=FactCategory.VITAL,
+                    source="Vitals",
+                ),
+                # INFO: duplicate fact
+                ChartFact(
+                    name="HR",
+                    value="72 bpm",
+                    category=FactCategory.VITAL,
+                    source="Triage",
+                ),
+                ChartFact(
+                    name="HR",
+                    value="72 bpm",
+                    category=FactCategory.VITAL,
+                    source="Nursing note",
+                ),
+            ],
+            raw_text="SpO2 110, HR 72 x2",
+        )
+        report = run_all_checks(chart)
+        severities = {i.severity for i in report.inconsistencies}
+        assert InconsistencySeverity.CRITICAL in severities
+        assert InconsistencySeverity.INFO in severities
+
+    def test_false_positive_clean_clinical_chart(self):
+        """A realistic clean chart should produce no inconsistencies."""
+        chart = PatientChart(
+            facts=[
+                ChartFact(
+                    name="HR",
+                    value="78 bpm",
+                    category=FactCategory.VITAL,
+                    source="Triage vitals",
+                    timestamp=datetime(2026, 3, 7, 8, 0, tzinfo=timezone.utc),
+                ),
+                ChartFact(
+                    name="BP",
+                    value="132/84 mmHg",
+                    category=FactCategory.VITAL,
+                    source="Triage vitals",
+                    timestamp=datetime(2026, 3, 7, 8, 0, tzinfo=timezone.utc),
+                ),
+                ChartFact(
+                    name="Temp",
+                    value="37.1 C",
+                    category=FactCategory.VITAL,
+                    source="Triage vitals",
+                    timestamp=datetime(2026, 3, 7, 8, 0, tzinfo=timezone.utc),
+                ),
+                ChartFact(
+                    name="SpO2",
+                    value="97%",
+                    category=FactCategory.VITAL,
+                    source="Triage vitals",
+                    timestamp=datetime(2026, 3, 7, 8, 0, tzinfo=timezone.utc),
+                ),
+                ChartFact(
+                    name="RR",
+                    value="16 breaths/min",
+                    category=FactCategory.VITAL,
+                    source="Triage vitals",
+                    timestamp=datetime(2026, 3, 7, 8, 0, tzinfo=timezone.utc),
+                ),
+                ChartFact(
+                    name="Creatinine",
+                    value="1.1 mg/dL",
+                    category=FactCategory.LAB,
+                    source="BMP 3/7",
+                    timestamp=datetime(2026, 3, 7, 10, 0, tzinfo=timezone.utc),
+                ),
+                ChartFact(
+                    name="Creatinine",
+                    value="1.0 mg/dL",
+                    category=FactCategory.LAB,
+                    source="BMP 3/8",
+                    timestamp=datetime(2026, 3, 8, 10, 0, tzinfo=timezone.utc),
+                ),
+                ChartFact(
+                    name="Metformin",
+                    value="500mg BID",
+                    category=FactCategory.MEDICATION,
+                    source="Medication list",
+                    status=FactStatus.ACTIVE,
+                ),
+                ChartFact(
+                    name="Lisinopril",
+                    value="10mg daily",
+                    category=FactCategory.MEDICATION,
+                    source="Medication list",
+                    status=FactStatus.ACTIVE,
+                ),
+                ChartFact(
+                    name="Hypertension",
+                    value="controlled",
+                    category=FactCategory.DIAGNOSIS,
+                    source="Problem list",
+                    status=FactStatus.ACTIVE,
+                ),
+                ChartFact(
+                    name="Diabetes Mellitus Type 2",
+                    value="on oral agents",
+                    category=FactCategory.DIAGNOSIS,
+                    source="Problem list",
+                    status=FactStatus.ACTIVE,
+                ),
+                ChartFact(
+                    name="NKDA",
+                    value="no known drug allergies",
+                    category=FactCategory.ALLERGY,
+                    source="Allergy list",
+                ),
+            ],
+            raw_text="A realistic clean clinical chart",
+        )
+        report = run_all_checks(chart)
+        assert report.is_clean, (
+            f"False positive on clean chart: {[i.description for i in report.inconsistencies]}"
+        )
