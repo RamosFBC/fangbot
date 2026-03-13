@@ -78,7 +78,7 @@ class BatchRunner:
         For unit tests, this method is mocked.
         """
         from fangbot.brain.react import ReActLoop
-        from fangbot.brain.system_prompt import CLINICAL_SYSTEM_PROMPT
+        from fangbot.brain.system_prompt import build_system_prompt
         from fangbot.config import get_settings
         from fangbot.memory.audit import AuditLogger
         from fangbot.memory.session import SessionContext
@@ -100,7 +100,7 @@ class BatchRunner:
             async with mcp.connect():
                 registry = ToolRegistry(mcp)
                 tools = await registry.get_tools()
-                session = SessionContext(system_prompt=CLINICAL_SYSTEM_PROMPT)
+                session = SessionContext(system_prompt=build_system_prompt(uncertainty_calibration=True))
                 react = ReActLoop(
                     provider=provider,
                     mcp_client=mcp,
